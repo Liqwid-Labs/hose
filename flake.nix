@@ -48,7 +48,7 @@
         devShells.default = craneLib.devShell {
           checks = self.checks.${system};
           shellHook = ''
-            export DOPPLER_PROJECT=betterfrost
+            export DOPPLER_PROJECT=hose
             export DOPPLER_CONFIG=dev
             export DOPPLER_ENVIRONMENT=dev
           '';

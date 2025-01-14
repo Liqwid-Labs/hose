@@ -22,4 +22,11 @@ pub struct Config {
     /// This should be an instance of cardano-db-sync with the `utxo_only` preset
     #[arg(long, env)]
     pub utxo_database_url: String,
+
+    /// The mnemonic for the wallet to use for signing transactions
+    #[arg(long, env)]
+    pub wallet_mnemonic: String,
+    /// The password for the wallet to use for signing transactions
+    #[arg(long, env)]
+    pub wallet_password: String,
 }

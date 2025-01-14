@@ -2,7 +2,7 @@ use crate::config::Config;
 use anyhow::Context;
 use betterfrost_client::Client;
 use clap::Parser;
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use sqlx::postgres::PgPoolOptions;
 
 mod config;
 
