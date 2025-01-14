@@ -34,5 +34,19 @@ async fn main() -> anyhow::Result<()> {
 
     let client = Client::new(db, utxo_db);
 
+    let private_key = pallas_wallet::hd::Bip32PrivateKey::from_bip39_mnenomic(
+        config.wallet_mnemonic,
+        config.wallet_password,
+    )?
+    .to_ed25519_private_key();
+
+    let wallet_utxos = client
+        .address_utxos(config.wallet_address, Default::default())
+        .await
+        .expect("could not get wallet utxos");
+
+    println!("{:?}", private_key.public_key());
+    println!("{:?}", wallet_utxos);
+
     Ok(())
 }

@@ -191,7 +191,6 @@ checksum = "d965446196e3b7decd44aa7ee49e31d630118f90ef12f97900f262eb915c951d"
 [[package]]
 name = "betterfrost_client"
 version = "0.1.0"
-source = "git+https://github.com/liqwid-labs/betterfrost#2f970dca9b9601e825a3fa083176497cef1aad45"
 dependencies = [
  "anyhow",
  "bech32 0.11.0",
@@ -245,6 +244,34 @@ dependencies = [
  "shlex",
  "syn 2.0.96",
  "which",
+]
+
+[[package]]
+name = "bip39"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33415e24172c1b7d6066f6d999545375ab8e1d95421d6784bdfff9496f292387"
+dependencies = [
+ "bitcoin_hashes",
+ "rand_core",
+ "serde",
+ "unicode-normalization",
+]
+
+[[package]]
+name = "bitcoin-internals"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9425c3bf7089c983facbae04de54513cce73b41c7f9ff8c845b54e7bc64ebbfb"
+
+[[package]]
+name = "bitcoin_hashes"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1930a4dabfebb8d7d9992db18ebe3ae2876f0a305fab206fd168df931ede293b"
+dependencies = [
+ "bitcoin-internals",
+ "hex-conservative",
 ]
 
 [[package]]
@@ -579,6 +606,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
+name = "ed25519-bip32"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb588f93c0d91b2f668849fd6d030cddb0b2e31f105963be189da5acdf492a21"
+dependencies = [
+ "cryptoxide",
+]
+
+[[package]]
 name = "either"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -874,6 +910,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
+name = "hex-conservative"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "212ab92002354b4819390025006c897e8140934349e8635c9b077f47b4dcbd20"
+
+[[package]]
 name = "hkdf"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -909,6 +951,7 @@ dependencies = [
  "clap",
  "dotenv",
  "env_logger",
+ "pallas-wallet",
  "serde",
  "sqlx",
  "thiserror 2.0.11",
@@ -1388,8 +1431,8 @@ dependencies = [
  "crc",
  "cryptoxide",
  "hex",
- "pallas-codec",
- "pallas-crypto",
+ "pallas-codec 0.31.0",
+ "pallas-crypto 0.31.0",
  "thiserror 1.0.69",
 ]
 
@@ -1406,6 +1449,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallas-codec"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1584d615857c0a44058fb612e892e9e0cc47b56c3c82cdf7347b5c1d1193598c"
+dependencies = [
+ "hex",
+ "minicbor",
+ "serde",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "pallas-crypto"
 version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1413,11 +1468,41 @@ checksum = "f5d84346a1f0da5240b2aa16fde96998b84cdcc466cb7c04ba24bb1e1630e0d3"
 dependencies = [
  "cryptoxide",
  "hex",
- "pallas-codec",
+ "pallas-codec 0.31.0",
  "rand_core",
  "serde",
  "thiserror 1.0.69",
  "zeroize",
+]
+
+[[package]]
+name = "pallas-crypto"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37c1d642326ce402eb9191aeacc3dd0bf2b499848e97a56396c978a6eb9dd31a"
+dependencies = [
+ "cryptoxide",
+ "hex",
+ "pallas-codec 0.32.0",
+ "rand_core",
+ "serde",
+ "thiserror 1.0.69",
+ "zeroize",
+]
+
+[[package]]
+name = "pallas-wallet"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "812859b4571cb53182d34094ae3ec391a25d50b0c586be5876d4d86e4eb124bc"
+dependencies = [
+ "bech32 0.9.1",
+ "bip39",
+ "cryptoxide",
+ "ed25519-bip32",
+ "pallas-crypto 0.32.0",
+ "rand",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -2366,9 +2451,9 @@ checksum = "adb9e6ca4f869e1180728b7950e35922a7fc6397f7b641499e8f3ef06e50dc83"
 
 [[package]]
 name = "unicode-normalization"
-version = "0.1.24"
+version = "0.1.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5033c97c4262335cded6d6fc3e5c18ab755e1a3dc96376350f3d8e9f009ad956"
+checksum = "5c5713f0fc4b5db668a2ac63cdb7bb4469d8c9fed047b1d0292cc7b0ce2ba921"
 dependencies = [
  "tinyvec",
 ]
