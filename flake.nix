@@ -52,7 +52,13 @@
             export DOPPLER_CONFIG=dev
             export DOPPLER_ENVIRONMENT=dev
           '';
-          packages = with pkgs; [ doppler cargo rustc cargo-watch ];
+          packages = with pkgs; [
+            doppler
+            cargo
+            rustc
+            cargo-watch
+            rust-analyzer
+          ];
         };
       });
 }
