@@ -1,8 +1,12 @@
 use crate::config::Config;
 use anyhow::Context;
+use betterfrost_client::addresses as betterfrost;
 use betterfrost_client::Client;
 use clap::Parser;
+use pallas_txbuilder::BuildConway;
+use pallas_txbuilder::BuiltTransaction;
 use pallas_txbuilder::StagingTransaction;
+use pallas_wallet::PrivateKey;
 use sqlx::postgres::PgPoolOptions;
 
 mod config;
@@ -10,6 +14,7 @@ mod config;
 #[derive(Debug)]
 pub enum Error {
     ClientError(betterfrost_client::Error),
+    TxBuilderError(pallas_txbuilder::TxBuilderError),
 }
 
 impl From<betterfrost_client::Error> for Error {
@@ -18,18 +23,38 @@ impl From<betterfrost_client::Error> for Error {
     }
 }
 
+impl From<pallas_txbuilder::TxBuilderError> for Error {
+    fn from(e: pallas_txbuilder::TxBuilderError) -> Self {
+        Self::TxBuilderError(e)
+    }
+}
+
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-async fn simple_transaction(client: &Client, config: &Config) -> Result<StagingTransaction> {
+// fn utxo_lovelace(utxo: &betterfrost::AddressUtxo) -> u64 {
+//     utxo.amount
+//         .into_iter()
+//         .filter(|amount| amount.unit == "lovelace")
+//         .map(|amount| amount.quantity)
+//         .unwrap_or(0)
+// }
+
+async fn simple_transaction(client: &Client, config: &Config) -> Result<BuiltTransaction> {
     let tx = StagingTransaction::new();
 
     let own_utxos = client
         .address_utxos(config.wallet_address.clone(), Default::default())
         .await?;
 
+    // own_utxos.into_iter().filter(|utxo| ).collect::<Vec<_>>();
+
+    let tx = tx.fee(2_500_000);
+
     println!("{:?}", own_utxos);
 
-    Ok(tx)
+    let built_tx = tx.build_conway_raw()?;
+
+    Ok(built_tx)
 }
 
 #[tokio::main]
@@ -69,14 +94,15 @@ async fn main() -> anyhow::Result<()> {
     let wallet_utxos = client
         .address_utxos(config.wallet_address.clone(), Default::default())
         .await
-        .expect("could not get wallet utxos");
+        .expect("Could not get wallet utxos");
 
-    println!("{:?}", private_key.public_key());
-    println!("{:?}", wallet_utxos);
-
-    simple_transaction(&client, &config)
+    let tx = simple_transaction(&client, &config)
         .await
         .expect("Could not create transaction");
+
+    let tx = tx.sign(private_key).expect("Could not sign transaction");
+
+    println!("{:?}", tx);
 
     Ok(())
 }
