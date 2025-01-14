@@ -26,7 +26,12 @@ pub struct Config {
     /// The mnemonic for the wallet to use for signing transactions
     #[arg(long, env)]
     pub wallet_mnemonic: String,
+
     /// The password for the wallet to use for signing transactions
     #[arg(long, env)]
     pub wallet_password: String,
+
+    /// The address for the wallet to use for signing transactions
+    #[arg(long, env)]
+    pub wallet_address: String,
 }
