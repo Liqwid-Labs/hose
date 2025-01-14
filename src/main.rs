@@ -2,9 +2,35 @@ use crate::config::Config;
 use anyhow::Context;
 use betterfrost_client::Client;
 use clap::Parser;
+use pallas_txbuilder::StagingTransaction;
 use sqlx::postgres::PgPoolOptions;
 
 mod config;
+
+#[derive(Debug)]
+pub enum Error {
+    ClientError(betterfrost_client::Error),
+}
+
+impl From<betterfrost_client::Error> for Error {
+    fn from(e: betterfrost_client::Error) -> Self {
+        Self::ClientError(e)
+    }
+}
+
+pub type Result<T, E = Error> = std::result::Result<T, E>;
+
+async fn simple_transaction(client: &Client, config: &Config) -> Result<StagingTransaction> {
+    let tx = StagingTransaction::new();
+
+    let own_utxos = client
+        .address_utxos(config.wallet_address.clone(), Default::default())
+        .await?;
+
+    println!("{:?}", own_utxos);
+
+    Ok(tx)
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -35,18 +61,22 @@ async fn main() -> anyhow::Result<()> {
     let client = Client::new(db, utxo_db);
 
     let private_key = pallas_wallet::hd::Bip32PrivateKey::from_bip39_mnenomic(
-        config.wallet_mnemonic,
-        config.wallet_password,
+        config.wallet_mnemonic.clone(),
+        config.wallet_password.clone(),
     )?
     .to_ed25519_private_key();
 
     let wallet_utxos = client
-        .address_utxos(config.wallet_address, Default::default())
+        .address_utxos(config.wallet_address.clone(), Default::default())
         .await
         .expect("could not get wallet utxos");
 
     println!("{:?}", private_key.public_key());
     println!("{:?}", wallet_utxos);
+
+    simple_transaction(&client, &config)
+        .await
+        .expect("Could not create transaction");
 
     Ok(())
 }

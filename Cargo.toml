@@ -17,3 +17,5 @@ serde = { version = "1.0", features = ["derive"] }
 anyhow = "1.0.95"
 
 pallas-wallet = { version = "0.32.0" }
+pallas-txbuilder = { version = "0.32.0" }
+pallas-crypto = { version = "0.32.0" }

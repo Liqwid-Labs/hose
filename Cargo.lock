@@ -199,7 +199,7 @@ dependencies = [
  "dotenv",
  "futures",
  "log",
- "pallas-addresses",
+ "pallas-addresses 0.31.0",
  "rustls",
  "serde",
  "serde_json",
@@ -232,7 +232,7 @@ dependencies = [
  "bitflags",
  "cexpr",
  "clang-sys",
- "itertools",
+ "itertools 0.12.1",
  "lazy_static",
  "lazycell",
  "log",
@@ -951,6 +951,8 @@ dependencies = [
  "clap",
  "dotenv",
  "env_logger",
+ "pallas-crypto 0.32.0",
+ "pallas-txbuilder",
  "pallas-wallet",
  "serde",
  "sqlx",
@@ -1165,6 +1167,15 @@ name = "itertools"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
 dependencies = [
  "either",
 ]
@@ -1437,6 +1448,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallas-addresses"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7bd039d7f1618d12ff348dd03eebe38c5d2a010325750e5341526c419b0f8e0"
+dependencies = [
+ "base58",
+ "bech32 0.9.1",
+ "crc",
+ "cryptoxide",
+ "hex",
+ "pallas-codec 0.32.0",
+ "pallas-crypto 0.32.0",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "pallas-codec"
 version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1488,6 +1515,57 @@ dependencies = [
  "serde",
  "thiserror 1.0.69",
  "zeroize",
+]
+
+[[package]]
+name = "pallas-primitives"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d30f5053073554d016a9f009c077f9a84275951a611cce54230de6c54d34d9b"
+dependencies = [
+ "base58",
+ "bech32 0.9.1",
+ "hex",
+ "log",
+ "pallas-codec 0.32.0",
+ "pallas-crypto 0.32.0",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "pallas-traverse"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02d2572d316883fe866ae648bc3c5357e70cbbe8de5d78b1246f6109520fa52f"
+dependencies = [
+ "hex",
+ "itertools 0.13.0",
+ "pallas-addresses 0.32.0",
+ "pallas-codec 0.32.0",
+ "pallas-crypto 0.32.0",
+ "pallas-primitives",
+ "paste",
+ "serde",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "pallas-txbuilder"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b126cd2f387af2478f9b0f6b422c613f74024350600cf5bd7c31e2c85c3c7062"
+dependencies = [
+ "hex",
+ "pallas-addresses 0.32.0",
+ "pallas-codec 0.32.0",
+ "pallas-crypto 0.32.0",
+ "pallas-primitives",
+ "pallas-traverse",
+ "pallas-wallet",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
