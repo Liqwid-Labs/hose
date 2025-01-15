@@ -5,6 +5,7 @@ use clap::Parser;
 use pallas_primitives::Fragment;
 use simple_tx::simple_transaction;
 use simple_tx::TargetUser;
+use submission::submit_transaction;
 
 mod config;
 mod simple_tx;
@@ -55,6 +56,8 @@ async fn main() -> anyhow::Result<()> {
     let conway_tx = pallas_primitives::conway::Tx::decode_fragment(&tx.tx_bytes.0).expect("ok");
 
     println!("{:?}", hex::encode(&minicbor::to_vec(&conway_tx)?));
+
+    submit_transaction(hex::encode(tx.tx_hash.0), &minicbor::to_vec(&conway_tx)?).await?;
 
     Ok(())
 }

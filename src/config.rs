@@ -6,9 +6,9 @@ use clap::Parser;
 #[derive(Debug, Clone)]
 pub struct Network(pallas_primitives::NetworkId);
 
-impl Into<u8> for Network {
-    fn into(self) -> u8 {
-        match self.0 {
+impl From<Network> for u8 {
+    fn from(val: Network) -> Self {
+        match val.0 {
             pallas_primitives::NetworkId::Mainnet => 1,
             pallas_primitives::NetworkId::Testnet => 0,
         }

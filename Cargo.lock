@@ -191,7 +191,6 @@ checksum = "d965446196e3b7decd44aa7ee49e31d630118f90ef12f97900f262eb915c951d"
 [[package]]
 name = "betterfrost_client"
 version = "0.1.0"
-source = "git+https://github.com/liqwid-labs/betterfrost#17240bba27073b5dd20ba5681645e51a9728f820"
 dependencies = [
  "anyhow",
  "bech32 0.11.0",
@@ -345,8 +344,10 @@ checksum = "7e36cc9d416881d2e24f9a963be5fb1cd90966419ac844274161d10488b3e825"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
+ "js-sys",
  "num-traits",
  "serde",
+ "wasm-bindgen",
  "windows-targets 0.52.6",
 ]
 
@@ -961,9 +962,11 @@ dependencies = [
  "hex",
  "minicbor",
  "pallas-addresses 0.32.0",
+ "pallas-applying",
  "pallas-crypto 0.32.0",
  "pallas-network",
  "pallas-primitives",
+ "pallas-traverse",
  "pallas-txbuilder",
  "pallas-wallet",
  "serde",
@@ -1476,6 +1479,22 @@ dependencies = [
  "pallas-codec 0.32.0",
  "pallas-crypto 0.32.0",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "pallas-applying"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15e103c84957d01753f2103c9d2e8f845638309af54d899c1c857e0b0d45cbcf"
+dependencies = [
+ "chrono",
+ "hex",
+ "pallas-addresses 0.32.0",
+ "pallas-codec 0.32.0",
+ "pallas-crypto 0.32.0",
+ "pallas-primitives",
+ "pallas-traverse",
+ "rand",
 ]
 
 [[package]]

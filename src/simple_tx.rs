@@ -18,6 +18,7 @@ impl TargetUser {
 }
 
 #[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum Error {
     #[allow(dead_code)]
     ClientError(betterfrost_client::Error),
@@ -89,7 +90,7 @@ pub async fn simple_transaction(
         .await?;
 
     // TODO: estimate the fee
-    let fee = 200_000;
+    let fee = 0; // 200_000;
 
     let valid_fee_utxos = own_utxos
         .iter()
