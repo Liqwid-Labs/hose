@@ -6,6 +6,15 @@ use clap::Parser;
 #[derive(Debug, Clone)]
 pub struct Network(pallas_primitives::NetworkId);
 
+impl Network {
+    pub fn network_magic(&self) -> u32 {
+        match self.0 {
+            pallas_primitives::NetworkId::Mainnet => 764824073,
+            pallas_primitives::NetworkId::Testnet => 2,
+        }
+    }
+}
+
 impl From<Network> for u8 {
     fn from(val: Network) -> Self {
         match val.0 {

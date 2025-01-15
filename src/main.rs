@@ -57,7 +57,13 @@ async fn main() -> anyhow::Result<()> {
 
     println!("{:?}", hex::encode(&minicbor::to_vec(&conway_tx)?));
 
-    submit_transaction(hex::encode(tx.tx_hash.0), &minicbor::to_vec(&conway_tx)?).await?;
+    submit_transaction(
+        &config,
+        &client,
+        hex::encode(tx.tx_hash.0),
+        &minicbor::to_vec(&conway_tx)?,
+    )
+    .await?;
 
     Ok(())
 }
