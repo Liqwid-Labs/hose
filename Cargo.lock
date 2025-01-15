@@ -191,6 +191,7 @@ checksum = "d965446196e3b7decd44aa7ee49e31d630118f90ef12f97900f262eb915c951d"
 [[package]]
 name = "betterfrost_client"
 version = "0.1.0"
+source = "git+https://github.com/liqwid-labs/betterfrost#17240bba27073b5dd20ba5681645e51a9728f820"
 dependencies = [
  "anyhow",
  "bech32 0.11.0",
@@ -961,12 +962,14 @@ dependencies = [
  "minicbor",
  "pallas-addresses 0.32.0",
  "pallas-crypto 0.32.0",
+ "pallas-network",
  "pallas-primitives",
  "pallas-txbuilder",
  "pallas-wallet",
  "serde",
  "serde_cbor",
  "serde_json",
+ "socket2",
  "sqlx",
  "thiserror 2.0.11",
  "tokio",
@@ -1527,6 +1530,24 @@ dependencies = [
  "serde",
  "thiserror 1.0.69",
  "zeroize",
+]
+
+[[package]]
+name = "pallas-network"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6e44dd876dc70cbbfc865bb9143131f57edab2c45e873d915732b81982ddb67"
+dependencies = [
+ "byteorder",
+ "hex",
+ "itertools 0.13.0",
+ "pallas-codec 0.32.0",
+ "pallas-crypto 0.32.0",
+ "rand",
+ "socket2",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

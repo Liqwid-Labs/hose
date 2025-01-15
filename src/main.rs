@@ -12,6 +12,7 @@ use pallas_txbuilder::Output;
 use pallas_txbuilder::StagingTransaction;
 
 mod config;
+mod submission;
 
 #[derive(Debug)]
 pub enum Error {
