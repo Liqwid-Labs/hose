@@ -1,4 +1,31 @@
+use std::str::FromStr;
+
 use clap::Parser;
+
+/// Represents the network to use
+#[derive(Debug, Clone)]
+pub struct Network(pallas_primitives::NetworkId);
+
+impl Into<u8> for Network {
+    fn into(self) -> u8 {
+        match self.0 {
+            pallas_primitives::NetworkId::Mainnet => 1,
+            pallas_primitives::NetworkId::Testnet => 0,
+        }
+    }
+}
+
+impl FromStr for Network {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Mainnet" => Ok(Network(pallas_primitives::NetworkId::Mainnet)),
+            "Testnet" => Ok(Network(pallas_primitives::NetworkId::Testnet)),
+            _ => Err(format!("unknown network {}", s)),
+        }
+    }
+}
 
 /// The configuration parameters for the application.
 ///
@@ -34,4 +61,8 @@ pub struct Config {
     /// The address for the wallet to use for signing transactions
     #[arg(long, env)]
     pub wallet_address: String,
+
+    /// The network to use
+    #[arg(long, env, value_parser = clap::value_parser!(Network))]
+    pub network: Network,
 }

@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-betterfrost_client = { git = "https://github.com/liqwid-labs/betterfrost" }
+# betterfrost_client = { git = "https://github.com/liqwid-labs/betterfrost" }
+betterfrost_client = { path = "../betterfrost/betterfrost-client" }
 
 clap = { version = "4.5.26", features = ["derive", "env"] }
 dotenv = "0.15.0"
