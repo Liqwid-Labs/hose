@@ -52,7 +52,14 @@ pub struct OgmiosError {
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
 pub enum OgmiosResponse {
-    Error { jsonrpc: String, error: OgmiosError },
+    Error {
+        jsonrpc: String,
+        error: OgmiosError,
+    },
+    Result {
+        jsonrpc: String,
+        result: serde_json::Value,
+    },
 }
 
 impl SubmitTx for OgmiosClient<'_> {

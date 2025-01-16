@@ -48,9 +48,9 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Could not create transaction");
 
-    let conway_tx = Tx::decode_fragment(&tx.tx_bytes.0).expect("ok");
+    let tx = tx.sign(config.wallet_payment_key.to_ed25519_private_key())?;
 
-    println!("{:?}", hex::encode(&minicbor::to_vec(&conway_tx)?));
+    let conway_tx = Tx::decode_fragment(&tx.tx_bytes.0).expect("ok");
 
     // Alternatively, we can submit the transaction directly to the node
     let mut direct_to_node = DirectToNode::new(&config, &client);

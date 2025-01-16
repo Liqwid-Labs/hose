@@ -98,8 +98,6 @@ pub async fn simple_transaction(
         .address_utxos(config.wallet_address.clone(), Default::default())
         .await?;
 
-    println!("Own utxos: {:?}", own_utxos);
-
     // We create the transaction twice. First we create it with a fixed fee, that's larger
     // than any possible fee we might calculate. Then we calculate the actual fee and
     // recreate the transaction
