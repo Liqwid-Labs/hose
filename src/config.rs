@@ -1,10 +1,11 @@
+use pallas::ledger::primitives::NetworkId;
 use std::str::FromStr;
 
 use clap::Parser;
 
 /// Represents the network to use
 #[derive(Debug, Clone)]
-pub struct Network(pallas_primitives::NetworkId);
+pub struct Network(NetworkId);
 
 impl Network {
     pub fn network_magic(&self) -> u32 {
@@ -18,8 +19,8 @@ impl Network {
 impl From<Network> for u8 {
     fn from(val: Network) -> Self {
         match val.0 {
-            pallas_primitives::NetworkId::Mainnet => 1,
-            pallas_primitives::NetworkId::Testnet => 0,
+            NetworkId::Mainnet => 1,
+            NetworkId::Testnet => 0,
         }
     }
 }
@@ -29,8 +30,8 @@ impl FromStr for Network {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "Mainnet" => Ok(Network(pallas_primitives::NetworkId::Mainnet)),
-            "Testnet" => Ok(Network(pallas_primitives::NetworkId::Testnet)),
+            "Mainnet" => Ok(Network(NetworkId::Mainnet)),
+            "Testnet" => Ok(Network(NetworkId::Testnet)),
             _ => Err(format!("unknown network {}", s)),
         }
     }

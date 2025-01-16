@@ -24,12 +24,9 @@ minicbor = "0.25.1"
 
 anyhow = "1.0.95"
 
-pallas-wallet = { version = "0.32.0" }
-pallas-txbuilder = { version = "0.32.0" }
-pallas-crypto = { version = "0.32.0" }
-pallas-primitives = { version = "0.32.0" }
-pallas-addresses = { version = "0.32.0" }
-pallas-network = { version = "0.32.0" }
-pallas-applying = { version = "0.32.0" }
-pallas-traverse = { version = "0.32.0" }
+pallas = { version = "0.32.0", features = ["applying", "unstable"] }
+tracing = "0.1.41"
+paste = "1.0.15"
+chrono = "0.4.39"
+itertools = "0.14.0"
 

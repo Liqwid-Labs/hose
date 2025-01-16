@@ -1,6 +1,8 @@
 use betterfrost_client::addresses as betterfrost;
-use pallas_addresses::{Address, PaymentKeyHash};
-use pallas_txbuilder::{BuildConway, BuiltTransaction, Input, Output, StagingTransaction};
+use pallas::{
+    ledger::addresses::{self, Address, PaymentKeyHash},
+    txbuilder::{self, BuildConway, BuiltTransaction, Input, Output, StagingTransaction},
+};
 
 use crate::config::Config;
 
@@ -23,13 +25,13 @@ pub enum Error {
     #[allow(dead_code)]
     ClientError(betterfrost_client::Error),
     #[allow(dead_code)]
-    TxBuilderError(pallas_txbuilder::TxBuilderError),
+    TxBuilderError(txbuilder::TxBuilderError),
     #[allow(dead_code)]
-    AddressError(pallas_addresses::Error),
+    AddressError(addresses::Error),
 }
 
-impl From<pallas_addresses::Error> for Error {
-    fn from(e: pallas_addresses::Error) -> Self {
+impl From<addresses::Error> for Error {
+    fn from(e: addresses::Error) -> Self {
         Self::AddressError(e)
     }
 }
@@ -40,8 +42,8 @@ impl From<betterfrost_client::Error> for Error {
     }
 }
 
-impl From<pallas_txbuilder::TxBuilderError> for Error {
-    fn from(e: pallas_txbuilder::TxBuilderError) -> Self {
+impl From<txbuilder::TxBuilderError> for Error {
+    fn from(e: txbuilder::TxBuilderError) -> Self {
         Self::TxBuilderError(e)
     }
 }

@@ -1,0 +1,11 @@
+[upstream]
+n2n_address = "mainnet-cardano-node:3001"
+n2c_address = "/tmp/node.socket"
+network_magic = 764824073
+is_testnet = false
+
+[genesis]
+byron_path = "byron.json"
+shelley_path = "shelley.json"
+alonzo_path = "alonzo.json"
+conway_path = "conway.json"
