@@ -344,6 +344,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "blueprint"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn 2.0.96",
+]
+
+[[package]]
 name = "bs58"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1101,6 +1112,7 @@ dependencies = [
  "betterfrost_client",
  "bip32",
  "bip39",
+ "blueprint",
  "chrono",
  "clap",
  "dotenv",

@@ -5,14 +5,15 @@ use quote::{format_ident, quote};
 use serde_json::{json, Value};
 use syn::{parse_macro_input, LitStr};
 
+mod schema;
+
 #[proc_macro]
 pub fn generate_cbor_struct(input: TokenStream) -> TokenStream {
     // Parse the input as a string literal
     let input = parse_macro_input!(input as LitStr);
 
-    let contents = fs::read_to_string(input.value()).expect(&format!(
-        "Failed to read plutus json definition: {file_path}"
-    ));
+    let contents =
+        fs::read_to_string(input.value()).expect(&format!("Failed to read plutus json definition"));
     let json: Value = serde_json::from_str(&contents).unwrap();
 
     // Get the first (and presumably only) definition

@@ -1,6 +1,7 @@
 use crate::config::Config;
 use anyhow::Context;
 use betterfrost_client::Client;
+use blueprint::generate_cbor_struct;
 use pallas::ledger::primitives::{conway::Tx, Fragment};
 use simple_tx::simple_transaction;
 use simple_tx::TargetUser;
@@ -13,6 +14,8 @@ mod config;
 mod params;
 mod simple_tx;
 mod submission;
+
+// generate_cbor_struct!("blueprint/plutus.json");
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
