@@ -7,7 +7,7 @@ use pallas::{
     },
     ledger::{
         configs::{alonzo, conway, shelley},
-        primitives::alonzo::Language as AlonzoLanguage,
+        primitives::{alonzo::Language as AlonzoLanguage, NetworkId},
     },
 };
 
@@ -27,8 +27,14 @@ macro_rules! apply_field {
     };
 }
 
-pub fn get_protocol_parameters() -> anyhow::Result<MultiEraProtocolParameters> {
-    let root = PathBuf::from("configs/mainnet");
+pub fn get_protocol_parameters(network: NetworkId) -> anyhow::Result<MultiEraProtocolParameters> {
+    let root = PathBuf::from(
+        "configs/"
+            + match network {
+                NetworkId::Mainnet => "mainnet",
+                NetworkId::Testnet => "preview",
+            },
+    );
     let shelley = shelley::from_file(&root.join("shelley.json"))?;
     let alonzo = alonzo::from_file(&root.join("alonzo.json"))?;
     let conway = conway::from_file(&root.join("conway.json"))?;

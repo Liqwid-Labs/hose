@@ -1,4 +1,5 @@
 use pallas::applying::{CertState, Environment, UTxOs, ValidationResult};
+use pallas::ledger::primitives::NetworkId;
 use pallas::ledger::traverse::{Era, MultiEraTx};
 use pallas::network::facades::NodeClient;
 use pallas::network::miniprotocols::localstate::queries_v16::{
@@ -66,7 +67,7 @@ impl SubmitTx for DirectToNode<'_> {
             block_slot: chain_tip_slot,
             prot_magic: network_magic,
             network_id: self.config.network.clone().into(),
-            prot_params: params::get_protocol_parameters()?,
+            prot_params: params::get_protocol_parameters(self.config.network)?,
             acnt: None,
         };
 
