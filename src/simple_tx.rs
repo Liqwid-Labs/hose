@@ -3,6 +3,7 @@ use pallas::{
     ledger::addresses::{self, Address, PaymentKeyHash},
     txbuilder::{self, BuildConway, BuiltTransaction, Input, Output, StagingTransaction},
 };
+use thiserror::Error;
 
 use crate::config::Config;
 
@@ -19,15 +20,21 @@ impl TargetUser {
     }
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum Error {
     #[allow(dead_code)]
+    #[error("Betterfrost error")]
     ClientError(betterfrost_client::Error),
     #[allow(dead_code)]
+    #[error("Transaction builder error: {0}")]
     TxBuilderError(txbuilder::TxBuilderError),
     #[allow(dead_code)]
+    #[error("Address error: {0}")]
     AddressError(addresses::Error),
+
+    #[error("No utxos to spend")]
+    NoUtxosToSpend,
 }
 
 impl From<addresses::Error> for Error {
@@ -103,7 +110,7 @@ pub async fn simple_transaction(
 
     let tx = tx.fee(fee);
 
-    let utxo_to_spend = valid_fee_utxos.first().unwrap();
+    let utxo_to_spend = valid_fee_utxos.first().ok_or(Error::NoUtxosToSpend)?;
 
     let tx = tx.input(address_utxo_to_input(utxo_to_spend));
 

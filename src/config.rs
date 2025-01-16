@@ -16,6 +16,12 @@ impl Network {
     }
 }
 
+impl Into<NetworkId> for Network {
+    fn into(self) -> NetworkId {
+        self.0
+    }
+}
+
 impl From<Network> for u8 {
     fn from(val: Network) -> Self {
         match val.0 {
@@ -64,10 +70,6 @@ pub struct Config {
     #[arg(long, env)]
     pub wallet_mnemonic: String,
 
-    /// The password for the wallet to use for signing transactions
-    #[arg(long, env)]
-    pub wallet_password: String,
-
     /// The address for the wallet to use for signing transactions
     #[arg(long, env)]
     pub wallet_address: String,
@@ -75,4 +77,8 @@ pub struct Config {
     /// The network to use
     #[arg(long, env, value_parser = clap::value_parser!(Network))]
     pub network: Network,
+
+    /// Ogmios URL
+    #[arg(long, env)]
+    pub ogmios_url: Option<String>,
 }

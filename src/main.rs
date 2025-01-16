@@ -12,11 +12,13 @@ use sqlx::postgres::PgPoolOptions;
 use submission::direct_to_node::DirectToNode;
 use submission::ogmios::OgmiosClient;
 use submission::SubmitTx;
+use wallet::load_private_key_from_mnemonic;
 
 mod config;
 mod params;
 mod simple_tx;
 mod submission;
+mod wallet;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -46,16 +48,7 @@ async fn main() -> anyhow::Result<()> {
 
     let client = Client::new(db, utxo_db);
 
-    let private_key =
-        Bip32PrivateKey::from_bip39_mnenomic(config.wallet_mnemonic.clone(), "".into())?;
-
-    // https://cardano.stackexchange.com/questions/7671/what-is-the-derivation-path-in-a-cardano-address
-    let account_key = private_key
-        .derive(ChildNumber::HARDENED_FLAG + 1852)
-        .derive(ChildNumber::HARDENED_FLAG + 1815)
-        .derive(ChildNumber::HARDENED_FLAG + 0);
-
-    let payment_key = account_key.derive(0).derive(0);
+    let payment_key = load_private_key_from_mnemonic(config.wallet_mnemonic.clone())?;
 
     let target_user = TargetUser::from_local_config(&config)?;
 
@@ -74,13 +67,19 @@ async fn main() -> anyhow::Result<()> {
     // Alternatively, we can submit the transaction directly to the node
     let mut direct_to_node = DirectToNode::new(&config, &client);
 
-    let ogmios = OgmiosClient::new(&config, "ws://mainnet-ogmios:1337").await?;
+    let result = if let Some(ogmios_url) = config.ogmios_url.clone() {
+        let mut ogmios = OgmiosClient::new(&config, &ogmios_url).await?;
 
-    let mut client_to_use = ogmios;
+        ogmios
+            .submit_tx(hex::encode(tx.tx_hash.0), &minicbor::to_vec(&conway_tx)?)
+            .await?
+    } else {
+        direct_to_node
+            .submit_tx(hex::encode(tx.tx_hash.0), &minicbor::to_vec(&conway_tx)?)
+            .await?
+    };
 
-    // direct_to_node
-    //     .submit_tx(hex::encode(tx.tx_hash.0), &minicbor::to_vec(&conway_tx)?)
-    //     .await?;
+    println!("Submission result: {:?}", result);
 
     Ok(())
 }

@@ -83,7 +83,8 @@ impl SubmitTx for OgmiosClient<'_> {
 
         match response {
             Ok(Message::Text(text)) => {
-                let response: OgmiosResponse = serde_json::from_str(&text)?;
+                let response: OgmiosResponse =
+                    serde_json::from_str(&text).inspect_err(|e| println!("{e:?}: {text}"))?;
 
                 match response {
                     OgmiosResponse::Error { error, .. } => {

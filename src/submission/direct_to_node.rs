@@ -67,7 +67,7 @@ impl SubmitTx for DirectToNode<'_> {
             block_slot: chain_tip_slot,
             prot_magic: network_magic,
             network_id: self.config.network.clone().into(),
-            prot_params: params::get_protocol_parameters(self.config.network)?,
+            prot_params: params::get_protocol_parameters(self.config.network.clone().into())?,
             acnt: None,
         };
 
