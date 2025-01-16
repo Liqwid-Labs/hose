@@ -110,6 +110,9 @@ pub struct Config {
 
     /// The protocol parameters
     pub protocol_params: MultiEraProtocolParameters,
+
+    /// Ogmios url
+    pub ogmios_url: Option<String>,
 }
 
 impl Config {
@@ -125,6 +128,7 @@ impl Config {
             wallet_address: config.wallet_address.clone(),
             network: config.network,
             protocol_params,
+            ogmios_url: config.ogmios_url,
         })
     }
 
