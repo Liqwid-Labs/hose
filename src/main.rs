@@ -7,7 +7,9 @@ use pallas::wallet::keystore::hd::Bip32PrivateKey;
 use simple_tx::simple_transaction;
 use simple_tx::TargetUser;
 use sqlx::postgres::PgPoolOptions;
-use submission::submit_transaction;
+use submission::direct_to_node::DirectToNode;
+use submission::ogmios::OgmiosClient;
+use submission::SubmitTx;
 
 mod config;
 mod params;
@@ -60,13 +62,14 @@ async fn main() -> anyhow::Result<()> {
 
     println!("{:?}", hex::encode(&minicbor::to_vec(&conway_tx)?));
 
-    submit_transaction(
-        &config,
-        &client,
-        hex::encode(tx.tx_hash.0),
-        &minicbor::to_vec(&conway_tx)?,
-    )
-    .await?;
+    // Alternatively, we can submit the transaction directly to the node
+    let _direct_to_node = DirectToNode::new(&config, &client);
+
+    let mut ogmios = OgmiosClient::new(&config, "ws://mainnet-ogmios:1337").await?;
+
+    ogmios
+        .submit_tx(hex::encode(tx.tx_hash.0), &minicbor::to_vec(&conway_tx)?)
+        .await?;
 
     Ok(())
 }

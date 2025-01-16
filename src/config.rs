@@ -10,8 +10,8 @@ pub struct Network(NetworkId);
 impl Network {
     pub fn network_magic(&self) -> u32 {
         match self.0 {
-            pallas_primitives::NetworkId::Mainnet => 764824073,
-            pallas_primitives::NetworkId::Testnet => 2,
+            NetworkId::Mainnet => 764824073,
+            NetworkId::Testnet => 2,
         }
     }
 }
