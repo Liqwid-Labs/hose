@@ -11,6 +11,16 @@
     "license": "Apache-2.0"
   },
   "definitions": {
+    "ByteArray": {
+      "dataType": "bytes"
+    },
+    "Int": {
+      "dataType": "integer"
+    },
+    "VerificationKeyHash": {
+      "title": "VerificationKeyHash",
+      "dataType": "bytes"
+    },
     "liqwid/ActionValue": {
       "title": "ActionValue",
       "anyOf": [

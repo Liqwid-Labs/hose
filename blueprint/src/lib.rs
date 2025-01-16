@@ -1,8 +1,9 @@
 use std::fs;
 
+use heck::ToSnakeCase;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use serde_json::{json, Value};
+use serde_json::Value;
 use syn::{parse_macro_input, LitStr};
 
 mod schema;
@@ -12,59 +13,69 @@ pub fn generate_cbor_struct(input: TokenStream) -> TokenStream {
     // Parse the input as a string literal
     let input = parse_macro_input!(input as LitStr);
 
-    let contents =
-        fs::read_to_string(input.value()).expect(&format!("Failed to read plutus json definition"));
+    let file_path = input.value();
+    let contents = fs::read_to_string(file_path.clone())
+        .unwrap_or_else(|_| panic!("Failed to read plutus json definition: {file_path}"));
     let json: Value = serde_json::from_str(&contents).unwrap();
 
     // Get the first (and presumably only) definition
     let definitions = json["definitions"].as_object().unwrap();
-    let (_, struct_def) = definitions.iter().next().unwrap();
 
-    // Get the struct name and fields from the first anyOf variant
-    let struct_name = struct_def["title"].as_str().unwrap();
-    // TODO: assumes single anyOf field
-    // We would need to use enum instead of struct if there are multiple
-    let fields = &struct_def["anyOf"][0]["fields"].as_array().unwrap();
+    let types = definitions.iter().map(|(_, def)| {
+        // Get the struct name and fields from the first anyOf variant
+        let type_name = def["title"].as_str().unwrap();
 
-    // Convert fields to Rust field definitions
-    let field_definitions = fields.iter().enumerate().map(|(i, field)| {
-        let field_name = field["title"].as_str().unwrap();
-        let field_ident = format_ident!("{}", to_snake_case(field_name));
+        if let Some(datatype) = def.get("dataType") {
+            let type_value = match datatype.as_str().unwrap() {
+                "integer" => "pallas::codec::utils::AnyUInt",
+                "bytes" => "pallas::codec::utils::Bytes",
+                _ => panic!("Unsupported data type: {datatype}"),
+            };
+            quote! {
+                type #type_name = #type_value;
+            }
+        } else if let Some(any_of) = def.get("anyOf") {
+            if any_of.as_array().unwrap().len() != 1 {
+                todo!("Support multiple anyOf variants");
+            }
 
-        // Convert field type (assuming all are BigInt for this example)
-        quote! {
-            #[n(#i)]
-            pub #field_ident: BigInt
+            // TODO: assumes single anyOf field
+            // We would need to use enum instead of struct if there are multiple
+            let variant = &any_of[0];
+            if variant["dataType"] != "constructor" {
+                todo!("Only constructor datatypes are supported as a variant with anyOf");
+            }
+            let fields = &variant["fields"]
+                .as_array()
+                .expect("Expected fields in anyOf variant, pure datatype isn't supported");
+
+            // Convert fields to Rust field definitions
+            let field_definitions = fields.iter().enumerate().map(|(i, field)| {
+                let field_name = field["title"].as_str().unwrap();
+
+                let field_ident = format_ident!("{}", field_name.to_snake_case());
+                let field_type = field["$ref"].as_str().unwrap().split('/').last().unwrap();
+
+                quote! {
+                    #[n(#i)]
+                    pub #field_ident: #field_type
+                }
+            });
+
+            // Generate the final struct
+            let struct_ident = format_ident!("{}", type_name);
+            quote! {
+                #[derive(Debug, Encode, Decode, Serialize, Deserialize, PartialEq, Clone)]
+                pub struct #struct_ident {
+                    #(#field_definitions),*
+                }
+            }
+        } else {
+            panic!("Unsupported definition: {def:?}")
         }
     });
 
-    // Generate the final struct
-    let struct_ident = format_ident!("{}", struct_name);
-    let expanded = quote! {
-        #[derive(Debug, Encode, Decode, Serialize, Deserialize, PartialEq, Clone)]
-        pub struct #struct_ident {
-            #(#field_definitions),*
-        }
-    };
-
-    expanded.into()
-}
-
-// Helper function to convert camelCase to snake_case
-fn to_snake_case(s: &str) -> String {
-    let mut result = String::new();
-    let mut chars = s.chars().peekable();
-
-    while let Some(c) = chars.next() {
-        if c.is_uppercase() {
-            if !result.is_empty() && chars.peek().map_or(false, |next| next.is_lowercase()) {
-                result.push('_');
-            }
-            result.push(c.to_lowercase().next().unwrap());
-        } else {
-            result.push(c);
-        }
-    }
-
-    result
+    TokenStream::from(quote! {
+        #(#types)*
+    })
 }
