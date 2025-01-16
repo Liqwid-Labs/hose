@@ -1,24 +1,18 @@
 use crate::config::Config;
 use anyhow::Context;
 use betterfrost_client::Client;
-use bip32::ChildNumber;
-use clap::Parser;
 use pallas::ledger::primitives::{conway::Tx, Fragment};
-use pallas::ledger::traverse::ComputeHash;
-use pallas::wallet::keystore::hd::Bip32PrivateKey;
 use simple_tx::simple_transaction;
 use simple_tx::TargetUser;
 use sqlx::postgres::PgPoolOptions;
 use submission::direct_to_node::DirectToNode;
 use submission::ogmios::OgmiosClient;
 use submission::SubmitTx;
-use wallet::load_private_key_from_mnemonic;
 
 mod config;
 mod params;
 mod simple_tx;
 mod submission;
-mod wallet;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -31,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Parse our configuration from the environment
     // This will exit with a help message if something is wrong
-    let config = Config::parse();
+    let config = Config::parse()?;
 
     // We create a single connection pool for SQLx that's shared across the whole application
     // This saves us from opening a new connection for every API call, which is wasteful
@@ -48,17 +42,11 @@ async fn main() -> anyhow::Result<()> {
 
     let client = Client::new(db, utxo_db);
 
-    let payment_key = load_private_key_from_mnemonic(config.wallet_mnemonic.clone())?;
-
     let target_user = TargetUser::from_local_config(&config)?;
 
-    let tx = simple_transaction(&client, target_user.clone(), &config)
+    let tx = simple_transaction(&client, target_user.address.clone(), &config)
         .await
         .expect("Could not create transaction");
-
-    let tx = tx
-        .sign(payment_key.to_ed25519_private_key())
-        .expect("Could not sign transaction");
 
     let conway_tx = Tx::decode_fragment(&tx.tx_bytes.0).expect("ok");
 

@@ -1,5 +1,6 @@
-use betterfrost_client::addresses as betterfrost;
+use betterfrost_client::addresses::{self as betterfrost, AddressUtxo};
 use pallas::{
+    applying::MultiEraProtocolParameters,
     ledger::addresses::{self, Address, PaymentKeyHash},
     txbuilder::{self, BuildConway, BuiltTransaction, Input, Output, StagingTransaction},
 };
@@ -35,6 +36,9 @@ pub enum Error {
 
     #[error("No utxos to spend")]
     NoUtxosToSpend,
+
+    #[error("Fee calculation failed")]
+    FeeCalculationFailed,
 }
 
 impl From<addresses::Error> for Error {
@@ -87,52 +91,77 @@ pub fn address_payment_key_hash(address: &Address) -> PaymentKeyHash {
 
 pub async fn simple_transaction(
     client: &betterfrost_client::Client,
-    target_user: TargetUser,
+    address: Address,
     config: &Config,
 ) -> Result<BuiltTransaction> {
-    let tx = StagingTransaction::new();
-
-    let address = target_user.address.clone();
-
     let own_utxos = client
         .address_utxos(config.wallet_address.clone(), Default::default())
         .await?;
 
     println!("Own utxos: {:?}", own_utxos);
 
-    // TODO: estimate the fee
-    let fee = 200_000; // 200_000;
+    // We create the transaction twice. First we create it with a fixed fee, that's larger
+    // than any possible fee we might calculate. Then we calculate the actual fee and
+    // recreate the transaction
+    let tmp_fee = 1_000_000;
+    let tx = build_tx(&address, tmp_fee, &own_utxos, config)?;
 
-    let valid_fee_utxos = own_utxos
+    let actual_fee = calculate_fee(tx.clone(), config)?;
+    let tx = build_tx(&address, actual_fee, &own_utxos, config)?;
+
+    if calculate_fee(tx.clone(), config)? != actual_fee {
+        return Err(Error::FeeCalculationFailed);
+    }
+
+    Ok(tx.build_conway_raw()?)
+}
+
+fn build_tx(
+    address: &Address,
+    fee: u64,
+    utxos: &Vec<AddressUtxo>,
+    config: &Config,
+) -> Result<StagingTransaction> {
+    let valid_fee_utxos = utxos
         .iter()
         .filter(|utxo| utxo_lovelace(utxo) >= fee)
         .collect::<Vec<_>>();
-
-    let tx = tx.fee(fee);
-
     let utxo_to_spend = valid_fee_utxos.first().ok_or(Error::NoUtxosToSpend)?;
 
-    let tx = tx.input(address_utxo_to_input(utxo_to_spend));
-
-    let o1 = Output::new(
+    let input = address_utxo_to_input(utxo_to_spend);
+    let output = Output::new(
         Address::from_bech32(&config.wallet_address.clone())?,
         utxo_lovelace(utxo_to_spend) - fee,
     );
 
-    let tx = tx.output(o1.clone());
+    Ok(StagingTransaction::new()
+        .fee(fee)
+        .input(input)
+        .output(output)
+        .change_address(address.clone())
+        .network_id(config.network.clone().into())
+        .collateral_input(address_utxo_to_input(utxo_to_spend))
+        // Collateral outputs are a CIP-40 feature. We don't need them for now.
+        // .collateral_output(output);
+        .disclosed_signer(address_payment_key_hash(&address)))
+}
 
-    let tx = tx.change_address(address.clone());
+fn calculate_fee(tx: StagingTransaction, config: &Config) -> Result<u64> {
+    let signed_tx = tx
+        .build_conway_raw()?
+        .sign(config.wallet_payment_key.to_ed25519_private_key())?;
 
-    let tx = tx.network_id(config.network.clone().into());
+    let params = match &config.protocol_params {
+        MultiEraProtocolParameters::Conway(params) => params,
+        _ => todo!("Implement support for non-conway protocol parameters in fee computation"),
+    };
 
-    let tx = tx.collateral_input(address_utxo_to_input(utxo_to_spend));
+    // TODO: calculate the fee for the script the simple way by setting a maximum mem and cpu usage
+    // params.execution_costs.mem_price
+    // params.execution_costs.cpu_price
 
-    // Collateral outputs are a CIP-40 feature. We don't need them for now.
-    // let tx = tx.collateral_output(o1);
+    let constant = params.minfee_a;
+    let coefficient = params.minfee_b;
 
-    let tx = tx.disclosed_signer(address_payment_key_hash(&address));
-
-    let built_tx = tx.build_conway_raw()?;
-
-    Ok(built_tx)
+    Ok((coefficient * (signed_tx.tx_bytes.0.len() as u32) + constant).into())
 }
