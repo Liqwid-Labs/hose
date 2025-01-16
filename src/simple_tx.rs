@@ -91,8 +91,10 @@ pub async fn simple_transaction(
         .address_utxos(config.wallet_address.clone(), Default::default())
         .await?;
 
+    println!("Own utxos: {:?}", own_utxos);
+
     // TODO: estimate the fee
-    let fee = 0; // 200_000;
+    let fee = 200_000; // 200_000;
 
     let valid_fee_utxos = own_utxos
         .iter()

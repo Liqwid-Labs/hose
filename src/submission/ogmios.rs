@@ -33,13 +33,13 @@ pub enum OgmiosClientError {
     #[error("No response")]
     NoResponse,
 
-    #[error("JSON decode error")]
+    #[error("JSON decode error: {0}")]
     JsonDecodeError(#[from] serde_json::Error),
 
     #[error("Unexpected response")]
     UnexpectedResponse,
 
-    #[error("Ogmios error")]
+    #[error("Error response from Ogmios: {0:?}")]
     OgmiosError(OgmiosError),
 }
 
@@ -84,8 +84,6 @@ impl SubmitTx for OgmiosClient<'_> {
         match response {
             Ok(Message::Text(text)) => {
                 let response: OgmiosResponse = serde_json::from_str(&text)?;
-
-                println!("{:?}", response);
 
                 match response {
                     OgmiosResponse::Error { error, .. } => {
