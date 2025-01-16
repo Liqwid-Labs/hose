@@ -28,13 +28,11 @@ macro_rules! apply_field {
 }
 
 pub fn get_protocol_parameters(network: NetworkId) -> anyhow::Result<MultiEraProtocolParameters> {
-    let root = PathBuf::from(
-        "configs/"
-            + match network {
-                NetworkId::Mainnet => "mainnet",
-                NetworkId::Testnet => "preview",
-            },
-    );
+    let network = match network {
+        NetworkId::Mainnet => "mainnet",
+        NetworkId::Testnet => "preview",
+    };
+    let root = PathBuf::from(format!("configs/{network}"));
     let shelley = shelley::from_file(&root.join("shelley.json"))?;
     let alonzo = alonzo::from_file(&root.join("alonzo.json"))?;
     let conway = conway::from_file(&root.join("conway.json"))?;
