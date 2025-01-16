@@ -34,4 +34,4 @@ futures-util = "0.3.31"
 bip39 = "2.1.0"
 bip32 = "0.5.2"
 
-blueprint = { path = "blueprint" }
+blueprint = { path = "./blueprint" }
