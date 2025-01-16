@@ -63,11 +63,13 @@ async fn main() -> anyhow::Result<()> {
     println!("{:?}", hex::encode(&minicbor::to_vec(&conway_tx)?));
 
     // Alternatively, we can submit the transaction directly to the node
-    let _direct_to_node = DirectToNode::new(&config, &client);
+    let direct_to_node = DirectToNode::new(&config, &client);
 
-    let mut ogmios = OgmiosClient::new(&config, "ws://mainnet-ogmios:1337").await?;
+    let ogmios = OgmiosClient::new(&config, "ws://mainnet-ogmios:1337").await?;
 
-    ogmios
+    let mut client_to_use = direct_to_node;
+
+    client_to_use
         .submit_tx(hex::encode(tx.tx_hash.0), &minicbor::to_vec(&conway_tx)?)
         .await?;
 

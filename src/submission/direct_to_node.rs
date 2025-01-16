@@ -10,6 +10,7 @@ use pallas::network::miniprotocols::Point;
 use pallas::network::miniprotocols::{self, localtxsubmission::EraTx, MAINNET_MAGIC};
 
 use crate::config::Config;
+use crate::params;
 
 use super::SubmitTx;
 
@@ -36,14 +37,13 @@ impl SubmitTx for DirectToNode<'_> {
         tx_id: TxId,
         cbor: &[u8],
     ) -> std::result::Result<TxId, Self::Error> {
-        println!("Submitting transaction with id {}", tx_id);
+        println!("Submitting transaction with id {}", &tx_id);
 
         let mut client = NodeClient::connect("/tmp/node.socket", MAINNET_MAGIC).await?;
 
         let statequery = client.statequery();
         statequery.acquire(None).await?;
         let era = get_current_era(statequery).await?;
-        let protocol_params = get_current_pparams(statequery, era).await?;
         let chain_tip_slot = match get_chain_point(statequery).await? {
             Point::Origin => panic!("chain tip is not known"),
             Point::Specific(slot, _) => slot,
@@ -58,7 +58,7 @@ impl SubmitTx for DirectToNode<'_> {
 
         let network_magic = self.config.network.network_magic();
 
-        let multi_era_tx = MultiEraTx::decode_for_era(named_era, &cbor)?;
+        let multi_era_tx = MultiEraTx::decode_for_era(named_era, cbor)?;
 
         let utxos = query_utxos(&multi_era_tx, self.betterfrost_client).await?;
 
@@ -66,7 +66,7 @@ impl SubmitTx for DirectToNode<'_> {
             block_slot: chain_tip_slot,
             prot_magic: network_magic,
             network_id: self.config.network.clone().into(),
-            prot_params: todo!("Get protocol params"),
+            prot_params: params::get_protocol_parameters()?,
             acnt: None,
         };
 
@@ -87,7 +87,7 @@ impl SubmitTx for DirectToNode<'_> {
 
         let monitor = client.monitor();
         monitor.acquire().await?;
-        let res = monitor.query_has_tx(tx_id).await?;
+        let res = monitor.query_has_tx(tx_id.clone()).await?;
         println!("has_tx: {:?}", res);
         monitor.release().await?;
 
