@@ -119,7 +119,7 @@ pub async fn simple_transaction(
 fn build_tx(
     address: &Address,
     fee: u64,
-    utxos: &Vec<AddressUtxo>,
+    utxos: &[AddressUtxo],
     config: &Config,
 ) -> Result<StagingTransaction> {
     let valid_fee_utxos = utxos
@@ -143,7 +143,7 @@ fn build_tx(
         .collateral_input(address_utxo_to_input(utxo_to_spend))
         // Collateral outputs are a CIP-40 feature. We don't need them for now.
         // .collateral_output(output);
-        .disclosed_signer(address_payment_key_hash(&address)))
+        .disclosed_signer(address_payment_key_hash(address)))
 }
 
 fn calculate_fee(tx: StagingTransaction, config: &Config) -> Result<u64> {
@@ -160,8 +160,8 @@ fn calculate_fee(tx: StagingTransaction, config: &Config) -> Result<u64> {
     // params.execution_costs.mem_price
     // params.execution_costs.cpu_price
 
-    let constant = params.minfee_a;
-    let coefficient = params.minfee_b;
+    let coefficient = params.minfee_a;
+    let constant = params.minfee_b;
 
     Ok((coefficient * (signed_tx.tx_bytes.0.len() as u32) + constant).into())
 }
