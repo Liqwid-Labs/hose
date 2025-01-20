@@ -29,9 +29,11 @@ pub fn generate_cbor_struct(input: TokenStream) -> TokenStream {
                 let ident = format_ident!("{}", key);
                 quote! { type #ident = pallas::codec::utils::Bytes; }
             }
-            TypeSchema::Tagged(TypeSchemaTagged::Constructor { title, fields }) => {
-                generate_constructor_struct(&title, &fields)
-            }
+            TypeSchema::Tagged(TypeSchemaTagged::Constructor {
+                title,
+                index,
+                fields,
+            }) => generate_constructor_struct(&title, index, &fields),
 
             TypeSchema::Variants { title: _, any_of } => {
                 // TODO: We would need to use enum instead of struct if there are multiple
@@ -40,9 +42,11 @@ pub fn generate_cbor_struct(input: TokenStream) -> TokenStream {
                 }
 
                 match &any_of[0] {
-                    TypeSchema::Tagged(TypeSchemaTagged::Constructor { title, fields }) => {
-                        generate_constructor_struct(title, fields)
-                    }
+                    TypeSchema::Tagged(TypeSchemaTagged::Constructor {
+                        title,
+                        index,
+                        fields,
+                    }) => generate_constructor_struct(title, *index, fields),
                     _ => todo!("Only constructor datatypes are supported in variants"),
                 }
             }
@@ -57,11 +61,18 @@ pub fn generate_cbor_struct(input: TokenStream) -> TokenStream {
     });
 
     TokenStream::from(quote! {
+        use pallas;
+        use minicbor;
+
         #(#types)*
     })
 }
 
-fn generate_constructor_struct(title: &str, fields: &[TypeSchema]) -> proc_macro2::TokenStream {
+fn generate_constructor_struct(
+    title: &str,
+    index: usize,
+    fields: &[TypeSchema],
+) -> proc_macro2::TokenStream {
     let field_definitions = fields.iter().enumerate().map(|(i, field)| match field {
         TypeSchema::Reference { title, reference } => {
             let index = Literal::usize_unsuffixed(i);
@@ -74,9 +85,19 @@ fn generate_constructor_struct(title: &str, fields: &[TypeSchema]) -> proc_macro
         _ => todo!("Only reference fields are supported in constructor variants"),
     });
 
+    let tag = if index < 7 {
+        121 + index
+    } else if index < 128 {
+        1280 + index - 7
+    } else {
+        // See: https://github.com/aiken-lang/aiken/blob/6d2e38851eb9b14cf5ea04fdc4722405b5c1544a/crates/uplc/src/ast.rs#L437
+        todo!("Constructors with more than 128 fields are not (yet) supported, you have {index}");
+    };
+
     let struct_ident = format_ident!("{}", title);
     quote! {
         #[derive(Debug, minicbor::Encode, minicbor::Decode, PartialEq, Clone)]
+        #[cbor(tag(#tag))]
         pub struct #struct_ident {
             #(#field_definitions),*
         }

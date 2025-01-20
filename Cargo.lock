@@ -348,6 +348,7 @@ name = "blueprint"
 version = "0.1.0"
 dependencies = [
  "heck",
+ "pallas",
  "proc-macro2",
  "quote",
  "serde",

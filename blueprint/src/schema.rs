@@ -18,7 +18,7 @@ pub struct Preamble {
     pub license: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum TypeSchema {
     Variants {
@@ -34,7 +34,7 @@ pub enum TypeSchema {
     Tagged(TypeSchemaTagged),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "dataType")]
 pub enum TypeSchemaTagged {
     #[serde(rename = "integer")]
@@ -44,12 +44,23 @@ pub enum TypeSchemaTagged {
     #[serde(rename = "constructor")]
     Constructor {
         title: String,
+        // This represents the index of the field in the constructor
+        // e.g. in Plutus Data, it looks like this:
+        // Data::Constr($constr, $fields)
+        index: usize,
         fields: Vec<TypeSchema>,
     },
 }
 
+impl From<TypeSchemaTagged> for TypeSchema {
+    fn from(tagged: TypeSchemaTagged) -> Self {
+        TypeSchema::Tagged(tagged)
+    }
+}
+
+#[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{BlueprintSchema, TypeSchema, TypeSchemaTagged};
 
     #[test]
     fn test_parse_blueprint_schema() {
@@ -60,7 +71,40 @@ mod tests {
 
         println!("{:#?}", schema);
 
-        assert_eq!(schema.preamble.title, "Liqwid");
-        assert_eq!(schema.preamble.version, "1.0.0");
+        assert_eq!(schema.preamble.title, "liqwid-labs/hello_world");
+        assert_eq!(schema.preamble.version, "0.0.0");
+
+        assert_eq!(
+            schema.definitions["liqwid/ActionValue"],
+            TypeSchema::Variants {
+                title: "ActionValue".to_string(),
+                any_of: vec![TypeSchema::Tagged(TypeSchemaTagged::Constructor {
+                    title: "ActionValue".to_string(),
+                    index: 0,
+                    fields: vec![
+                        TypeSchema::Reference {
+                            title: "supplyDiff".to_string(),
+                            reference: "#/definitions/Int".to_string(),
+                        },
+                        TypeSchema::Reference {
+                            title: "qTokensDiff".to_string(),
+                            reference: "#/definitions/Int".to_string(),
+                        },
+                        TypeSchema::Reference {
+                            title: "principalDiff".to_string(),
+                            reference: "#/definitions/Int".to_string(),
+                        },
+                        TypeSchema::Reference {
+                            title: "interestDiff".to_string(),
+                            reference: "#/definitions/Int".to_string(),
+                        },
+                        TypeSchema::Reference {
+                            title: "extraInterestRepaid".to_string(),
+                            reference: "#/definitions/Int".to_string(),
+                        },
+                    ],
+                }),]
+            }
+        );
     }
 }
