@@ -2,10 +2,12 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::safe_rename::{UnsafeName, UnsafeRef};
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BlueprintSchema {
     pub preamble: Preamble,
-    pub definitions: HashMap<String, TypeSchema>,
+    pub definitions: HashMap<UnsafeName, TypeSchema>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -18,32 +20,41 @@ pub struct Preamble {
     pub license: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum TypeSchema {
     Variants {
-        title: String,
+        title: UnsafeName,
         #[serde(rename = "anyOf")]
         any_of: Vec<TypeSchema>,
     },
     Reference {
-        title: String,
+        title: Option<UnsafeName>,
         #[serde(rename = "$ref")]
-        reference: String,
+        reference: UnsafeRef,
     },
     Tagged(TypeSchemaTagged),
+    OpaqueData {
+        title: UnsafeName,
+        description: Option<String>,
+    },
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "dataType")]
 pub enum TypeSchemaTagged {
     #[serde(rename = "integer")]
     Int,
     #[serde(rename = "bytes")]
     Bytes,
+    #[serde(rename = "list")]
+    List {
+        #[serde(rename = "items")]
+        items: Box<TypeSchema>,
+    },
     #[serde(rename = "constructor")]
     Constructor {
-        title: String,
+        title: UnsafeName,
         // This represents the index of the field in the constructor
         // e.g. in Plutus Data, it looks like this:
         // Data::Constr($constr, $fields)
@@ -75,32 +86,32 @@ mod tests {
         assert_eq!(schema.preamble.version, "0.0.0");
 
         assert_eq!(
-            schema.definitions["liqwid/ActionValue"],
+            schema.definitions[&"liqwid/ActionValue".into()],
             TypeSchema::Variants {
-                title: "ActionValue".to_string(),
+                title: "ActionValue".to_string().into(),
                 any_of: vec![TypeSchema::Tagged(TypeSchemaTagged::Constructor {
-                    title: "ActionValue".to_string(),
+                    title: "ActionValue".to_string().into(),
                     index: 0,
                     fields: vec![
                         TypeSchema::Reference {
-                            title: "supplyDiff".to_string(),
-                            reference: "#/definitions/Int".to_string(),
+                            title: Some("supplyDiff".to_string().into()),
+                            reference: "#/definitions/Int".to_string().into(),
                         },
                         TypeSchema::Reference {
-                            title: "qTokensDiff".to_string(),
-                            reference: "#/definitions/Int".to_string(),
+                            title: Some("qTokensDiff".to_string().into()),
+                            reference: "#/definitions/Int".to_string().into(),
                         },
                         TypeSchema::Reference {
-                            title: "principalDiff".to_string(),
-                            reference: "#/definitions/Int".to_string(),
+                            title: Some("principalDiff".to_string().into()),
+                            reference: "#/definitions/Int".to_string().into(),
                         },
                         TypeSchema::Reference {
-                            title: "interestDiff".to_string(),
-                            reference: "#/definitions/Int".to_string(),
+                            title: Some("interestDiff".to_string().into()),
+                            reference: "#/definitions/Int".to_string().into(),
                         },
                         TypeSchema::Reference {
-                            title: "extraInterestRepaid".to_string(),
-                            reference: "#/definitions/Int".to_string(),
+                            title: Some("extraInterestRepaid".to_string().into()),
+                            reference: "#/definitions/Int".to_string().into(),
                         },
                     ],
                 }),]

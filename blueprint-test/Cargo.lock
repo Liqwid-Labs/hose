@@ -151,6 +151,7 @@ checksum = "8f68f53c83ab957f72c32642f3868eec03eb974d1fb82e453128456482613d36"
 name = "blueprint"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "heck",
  "pallas",
  "proc-macro2",
@@ -158,6 +159,7 @@ dependencies = [
  "serde",
  "serde_json",
  "syn",
+ "thiserror 2.0.11",
 ]
 
 [[package]]
@@ -707,7 +709,7 @@ dependencies = [
  "hex",
  "pallas-codec",
  "pallas-crypto",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -722,7 +724,7 @@ dependencies = [
  "pallas-primitives",
  "pallas-traverse",
  "rand",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -732,7 +734,7 @@ dependencies = [
  "hex",
  "minicbor",
  "serde",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -760,7 +762,7 @@ dependencies = [
  "pallas-codec",
  "rand_core",
  "serde",
- "thiserror",
+ "thiserror 1.0.69",
  "zeroize",
 ]
 
@@ -772,7 +774,7 @@ dependencies = [
  "pallas-network",
  "pallas-traverse",
  "tap",
- "thiserror",
+ "thiserror 1.0.69",
  "tracing",
 ]
 
@@ -787,7 +789,7 @@ dependencies = [
  "pallas-crypto",
  "rand",
  "socket2",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tracing",
 ]
@@ -818,7 +820,7 @@ dependencies = [
  "pallas-primitives",
  "paste",
  "serde",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -834,7 +836,7 @@ dependencies = [
  "pallas-wallet",
  "serde",
  "serde_json",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -860,7 +862,7 @@ dependencies = [
  "ed25519-bip32",
  "pallas-crypto",
  "rand",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -1260,7 +1262,16 @@ version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 1.0.69",
+]
+
+[[package]]
+name = "thiserror"
+version = "2.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d452f284b73e6d76dd36758a0c8684b1d5be31f92b89d07fd5822175732206fc"
+dependencies = [
+ "thiserror-impl 2.0.11",
 ]
 
 [[package]]
@@ -1268,6 +1279,17 @@ name = "thiserror-impl"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "2.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26afc1baea8a989337eeb52b6e72a039780ce45c3edfcc9c5b9d112feeb173c2"
 dependencies = [
  "proc-macro2",
  "quote",
