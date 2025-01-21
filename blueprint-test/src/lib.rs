@@ -7,7 +7,7 @@ mod tests {
 
     #[test]
     fn test_generate_cbor_struct() {
-        let action_value = ActionValue {
+        let action_value = liqwid_ActionValue {
             supply_diff: AnyUInt::U64(1),
             q_tokens_diff: AnyUInt::U64(2),
             principal_diff: AnyUInt::U64(3),

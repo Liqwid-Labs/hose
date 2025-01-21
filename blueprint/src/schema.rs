@@ -11,6 +11,7 @@ pub struct BlueprintSchema {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Preamble {
     pub title: String,
     pub description: String,

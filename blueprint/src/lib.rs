@@ -7,6 +7,7 @@ use quote::{format_ident, quote};
 use schema::{BlueprintSchema, TypeSchema, TypeSchemaTagged};
 use syn::{parse_macro_input, LitStr};
 
+mod blueprint;
 mod safe_rename;
 mod schema;
 
