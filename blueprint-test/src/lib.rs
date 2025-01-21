@@ -17,7 +17,7 @@ mod tests {
 
         let bytes = minicbor::to_vec(&action_value).unwrap();
 
-        let action_value: ActionValue = minicbor::decode(&bytes).unwrap();
+        let action_value: liqwid_ActionValue = minicbor::decode(&bytes).unwrap();
 
         assert_eq!(action_value.supply_diff, AnyUInt::U64(1));
         assert_eq!(action_value.q_tokens_diff, AnyUInt::U64(2));
