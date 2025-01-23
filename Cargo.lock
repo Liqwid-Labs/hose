@@ -1103,8 +1103,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "hose-ogmios"
+name = "hose-submission"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "betterfrost_client",
+ "futures-util",
+ "hex",
+ "pallas",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.11",
+ "tokio",
+ "tokio-tungstenite",
+]
 
 [[package]]
 name = "hose-txbuilder"
@@ -1117,7 +1129,6 @@ dependencies = [
  "clap",
  "dotenv",
  "env_logger",
- "futures-util",
  "hex",
  "hose-blueprint",
  "minicbor",
@@ -1129,7 +1140,6 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.11",
  "tokio",
- "tokio-tungstenite",
  "tracing",
 ]
 

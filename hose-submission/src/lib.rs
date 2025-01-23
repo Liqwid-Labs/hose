@@ -1,7 +1,10 @@
 use pallas::network::miniprotocols::txmonitor::TxId;
 
-pub mod direct_to_node;
-pub mod ogmios;
+mod ogmios;
+mod direct_to_node;
+
+pub use ogmios::OgmiosClient;
+pub use direct_to_node::DirectToNode;
 
 pub trait SubmitTx {
     type Error;

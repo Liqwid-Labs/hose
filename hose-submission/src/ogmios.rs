@@ -1,4 +1,3 @@
-use crate::config::Config;
 use futures_util::{SinkExt, StreamExt};
 use pallas::network::miniprotocols::txmonitor::TxId;
 use serde::Deserialize;
@@ -9,19 +8,14 @@ use tokio_tungstenite::MaybeTlsStream;
 
 use super::SubmitTx;
 
-pub struct OgmiosClient<'a> {
-    config: &'a Config,
-
+pub struct OgmiosClient {
     ws: tokio_tungstenite::WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>,
 }
 
-impl<'a> OgmiosClient<'a> {
-    pub async fn new(config: &'a Config, ogmios_url: &str) -> anyhow::Result<Self> {
-        let (ws, _) = tokio_tungstenite::connect_async(ogmios_url)
-            .await
-            .expect("to connect");
-
-        Ok(Self { ws, config })
+impl OgmiosClient {
+    pub async fn new(ogmios_url: &str) -> Result<Self, OgmiosClientError> {
+        let (ws, _) = tokio_tungstenite::connect_async(ogmios_url).await?;
+        Ok(Self { ws })
     }
 }
 
@@ -62,7 +56,7 @@ pub enum OgmiosResponse {
     },
 }
 
-impl SubmitTx for OgmiosClient<'_> {
+impl SubmitTx for OgmiosClient {
     type Error = OgmiosClientError;
 
     async fn submit_tx(

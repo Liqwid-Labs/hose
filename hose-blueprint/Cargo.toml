@@ -7,11 +7,12 @@ edition = "2021"
 proc-macro = true
 
 [dependencies]
+pallas = { workspace = true }
+
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 quote = "1.0"
 syn = { version = "2.0", features = ["full"] }
-pallas = { git = "https://github.com/txpipe/pallas" }
 proc-macro2 = "1.0"
 heck = "0.5.0"
 anyhow = "1.0"
