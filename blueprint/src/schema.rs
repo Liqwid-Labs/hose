@@ -42,6 +42,13 @@ pub enum TypeSchema {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum ListItems {
+    Monomorphic(Box<TypeSchema>),
+    Polymorphic(Vec<TypeSchema>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "dataType")]
 pub enum TypeSchemaTagged {
     #[serde(rename = "integer")]
@@ -51,7 +58,7 @@ pub enum TypeSchemaTagged {
     #[serde(rename = "list")]
     List {
         #[serde(rename = "items")]
-        items: Box<TypeSchema>,
+        items: ListItems,
     },
     #[serde(rename = "constructor")]
     Constructor {
@@ -87,7 +94,7 @@ mod tests {
         assert_eq!(schema.preamble.version, "0.0.0");
 
         assert_eq!(
-            schema.definitions[&"liqwid/ActionValue".into()],
+            schema.definitions[&"liqwid/ActionValue".to_string().into()],
             TypeSchema::Variants {
                 title: "ActionValue".to_string().into(),
                 any_of: vec![TypeSchema::Tagged(TypeSchemaTagged::Constructor {

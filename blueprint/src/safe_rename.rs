@@ -15,12 +15,11 @@ impl From<String> for UnsafeRef {
 }
 
 impl UnsafeRef {
-    pub fn split(self) -> impl Iterator<Item = UnsafeName> {
+    pub fn split(self) -> Vec<UnsafeName> {
         self.0
             .split('/')
             .map(|s| UnsafeName(s.to_string()))
             .collect::<Vec<_>>()
-            .into_iter()
     }
 }
 
@@ -28,6 +27,12 @@ impl UnsafeRef {
 #[serde(transparent)]
 // Represents a string that is not yet verified as safe to use as a Rust identifier
 pub struct UnsafeName(String);
+
+impl UnsafeName {
+    pub fn unsafe_unwrap(self) -> String {
+        self.0
+    }
+}
 
 impl From<String> for UnsafeName {
     fn from(name: String) -> Self {

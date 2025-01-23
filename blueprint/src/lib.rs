@@ -4,7 +4,7 @@ use heck::ToSnakeCase;
 use proc_macro::TokenStream;
 use proc_macro2::{Literal, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
-use schema::{BlueprintSchema, TypeSchema, TypeSchemaTagged};
+use schema::{BlueprintSchema, ListItems, TypeSchema, TypeSchemaTagged};
 use syn::{parse_macro_input, LitStr};
 
 mod ir;
@@ -19,21 +19,30 @@ fn format_type_schema(schema: TypeSchema) -> Option<TokenStream2> {
         TypeSchema::Tagged(TypeSchemaTagged::Int) => Some(quote! { pallas::codec::utils::AnyUInt }),
         TypeSchema::Tagged(TypeSchemaTagged::Bytes) => Some(quote! { pallas::codec::utils::Bytes }),
         TypeSchema::OpaqueData { .. } => Some(quote! { pallas::codec::utils::AnyCbor }),
-        TypeSchema::Tagged(TypeSchemaTagged::List { items }) => {
-            let items = format_type_schema(*items)?;
-            let token_stream = quote! { Vec<#items> };
-            Some(token_stream)
-        }
+        TypeSchema::Tagged(TypeSchemaTagged::List { items }) => match items {
+            ListItems::Monomorphic(items) => {
+                let items = format_type_schema(*items)?;
+                Some(quote! { Vec<#items> })
+            }
+            ListItems::Polymorphic(items) => {
+                let items = items
+                    .into_iter()
+                    .map(format_type_schema)
+                    .collect::<Vec<Option<_>>>();
+
+                let items: Vec<_> = items.into_iter().collect::<Option<_>>()?;
+
+                Some(quote! { (#(#items),*) })
+            }
+        },
 
         TypeSchema::Reference { title, reference } => {
-            let ty = format_ident!(
-                "{}",
-                reference
-                    .split()
-                    .last()
-                    .expect(".last on reference")
-                    .safe_rename()
-            );
+            let reference = reference
+                .split()
+                .last()
+                .expect(".last on reference")
+                .to_owned();
+            let ty = format_ident!("{}", reference.safe_rename());
             Some(quote! { #ty })
         }
         _ => None,
@@ -138,7 +147,13 @@ fn generate_constructor_enum(
             .map(|(i, field)| match field {
                 TypeSchema::Reference { title, reference } => {
                     // Should not clone here
-                    let type_name = reference.clone().split().last().unwrap().safe_rename();
+                    let type_name = reference
+                        .clone()
+                        .split()
+                        .last()
+                        .unwrap()
+                        .to_owned()
+                        .safe_rename();
                     ConstructorField {
                         index: i,
                         title: title.clone(),
@@ -236,7 +251,13 @@ fn generate_constructor_struct(
         .map(|(i, field)| match field {
             TypeSchema::Reference { title, reference } => {
                 // Should not clone here
-                let type_name = reference.clone().split().last().unwrap().safe_rename();
+                let type_name = reference
+                    .clone()
+                    .split()
+                    .last()
+                    .unwrap()
+                    .to_owned()
+                    .safe_rename();
                 ConstructorField {
                     index: i,
                     title: title.clone(),
