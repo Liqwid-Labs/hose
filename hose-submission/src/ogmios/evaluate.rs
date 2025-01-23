@@ -6,7 +6,7 @@ use crate::EvaluateTx;
 use serde_json::json;
 
 impl EvaluateTx for OgmiosClient {
-    type Error = OgmiosClientError;
+    type Error = ClientError;
     async fn evaluate_tx(&mut self, cbor: &[u8]) -> std::result::Result<Vec<crate::ScriptEvaluation>, Self::Error> {
         let response = self.request(EvaluateRequest::new(cbor).into()).await?;
         let script_evaluation: Vec<ScriptEvaluation> = serde_json::from_value(response)?;

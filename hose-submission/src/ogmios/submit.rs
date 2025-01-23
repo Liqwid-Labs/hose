@@ -1,10 +1,10 @@
-use super::client::{ OgmiosClient, OgmiosClientError };
+use super::client::{ OgmiosClient, ClientError };
 use super::types::{ Request, RequestMethod };
 use crate::SubmitTx;
 use serde_json::json;
 
 impl SubmitTx for OgmiosClient {
-    type Error = OgmiosClientError;
+    type Error = ClientError;
 
     async fn submit_tx(&mut self, cbor: &[u8]) -> std::result::Result<(), Self::Error> {
         self.request(SubmitRequest::new(cbor).into()).await.map(|_| ())
