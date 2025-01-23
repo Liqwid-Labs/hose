@@ -137,7 +137,7 @@ fn build_tx(
         .input(input)
         .output(output)
         .change_address(address.clone())
-        .network_id(config.network.clone().into())
+        .network_id(config.network.into())
         .collateral_input(address_utxo_to_input(utxo_to_spend))
         // Collateral outputs are a CIP-40 feature. We don't need them for now.
         // .collateral_output(output);
@@ -149,7 +149,7 @@ fn calculate_fee(tx: StagingTransaction, config: &Config) -> Result<u64> {
         .build_conway_raw()?
         .sign(config.wallet_payment_key.to_ed25519_private_key())?;
 
-    let params = match &config.protocol_params {
+    let params = match config.network.into() {
         MultiEraProtocolParameters::Conway(params) => params,
         _ => todo!("Implement support for non-conway protocol parameters in fee computation"),
     };

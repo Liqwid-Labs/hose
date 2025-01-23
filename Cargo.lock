@@ -1103,6 +1103,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "hose-primitives"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "pallas",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "hose-submission"
 version = "0.1.0"
 dependencies = [
@@ -1110,6 +1120,7 @@ dependencies = [
  "betterfrost_client",
  "futures-util",
  "hex",
+ "hose-primitives",
  "pallas",
  "serde",
  "serde_json",
@@ -1125,12 +1136,13 @@ dependencies = [
  "anyhow",
  "betterfrost_client",
  "bip32",
- "chrono",
  "clap",
  "dotenv",
  "env_logger",
  "hex",
  "hose-blueprint",
+ "hose-primitives",
+ "hose-submission",
  "minicbor",
  "pallas",
  "paste",

@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "hose-blueprint",
+  "hose-primitives",
   "hose-submission",
   "hose-txbuilder"
 ]

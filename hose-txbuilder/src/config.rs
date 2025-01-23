@@ -1,53 +1,8 @@
 use bip32::ChildNumber;
-use pallas::{
-    applying::MultiEraProtocolParameters, ledger::primitives::NetworkId,
-    wallet::keystore::hd::Bip32PrivateKey,
-};
-use std::str::FromStr;
+use hose_primitives::NetworkId;
+use pallas::wallet::keystore::hd::Bip32PrivateKey;
 
 use clap::Parser;
-
-use crate::params::get_protocol_parameters;
-
-/// Represents the network to use
-#[derive(Debug, Clone)]
-pub struct Network(NetworkId);
-
-impl Network {
-    pub fn network_magic(&self) -> u32 {
-        match self.0 {
-            NetworkId::Mainnet => 764824073,
-            NetworkId::Testnet => 2,
-        }
-    }
-}
-
-impl Into<NetworkId> for Network {
-    fn into(self) -> NetworkId {
-        self.0
-    }
-}
-
-impl From<Network> for u8 {
-    fn from(val: Network) -> Self {
-        match val.0 {
-            NetworkId::Mainnet => 1,
-            NetworkId::Testnet => 0,
-        }
-    }
-}
-
-impl FromStr for Network {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "Mainnet" => Ok(Network(NetworkId::Mainnet)),
-            "Testnet" => Ok(Network(NetworkId::Testnet)),
-            _ => Err(format!("unknown network {}", s)),
-        }
-    }
-}
 
 /// The configuration parameters for the application.
 ///
@@ -81,8 +36,8 @@ struct ConfigInput {
     pub wallet_address: String,
 
     /// The network to use
-    #[arg(long, env, value_parser = clap::value_parser!(Network))]
-    pub network: Network,
+    #[arg(long, env, value_parser = clap::value_parser!(NetworkId))]
+    pub network: NetworkId,
 
     /// Ogmios URL
     #[arg(long, env)]
@@ -106,10 +61,7 @@ pub struct Config {
     pub wallet_address: String,
 
     /// The network to use
-    pub network: Network,
-
-    /// The protocol parameters
-    pub protocol_params: MultiEraProtocolParameters,
+    pub network: NetworkId,
 
     /// Ogmios url
     pub ogmios_url: Option<String>,
@@ -118,7 +70,6 @@ pub struct Config {
 impl Config {
     pub fn parse() -> anyhow::Result<Self> {
         let config = ConfigInput::parse();
-        let protocol_params = get_protocol_parameters(config.network.0)?;
         let payment_key = Self::load_private_key_from_mnemonic(config.wallet_mnemonic.clone())?;
 
         Ok(Self {
@@ -127,7 +78,6 @@ impl Config {
             wallet_payment_key: payment_key,
             wallet_address: config.wallet_address.clone(),
             network: config.network,
-            protocol_params,
             ogmios_url: config.ogmios_url,
         })
     }

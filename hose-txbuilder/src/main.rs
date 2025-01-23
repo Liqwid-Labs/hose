@@ -1,18 +1,16 @@
 use crate::config::Config;
 use anyhow::Context;
 use betterfrost_client::Client;
+use hose_submission::NodeClient;
+use hose_submission::OgmiosClient;
 use pallas::ledger::primitives::{conway::Tx, Fragment};
 use simple_tx::simple_transaction;
 use simple_tx::TargetUser;
 use sqlx::postgres::PgPoolOptions;
-use submission::direct_to_node::DirectToNode;
-use submission::ogmios::OgmiosClient;
-use submission::SubmitTx;
+use hose_submission::SubmitTx;
 
 mod config;
-mod params;
 mod simple_tx;
-mod submission;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -53,17 +51,17 @@ async fn main() -> anyhow::Result<()> {
     let conway_tx = Tx::decode_fragment(&tx.tx_bytes.0).expect("ok");
 
     // Alternatively, we can submit the transaction directly to the node
-    let mut direct_to_node = DirectToNode::new(&config, &client);
+    let mut direct_to_node = NodeClient::new(config.network, "/tmp/node.socket".into(), &client);
 
     let result = if let Some(ogmios_url) = config.ogmios_url.clone() {
-        let mut ogmios = OgmiosClient::new(&config, &ogmios_url).await?;
+        let mut ogmios = OgmiosClient::new(&ogmios_url).await?;
 
         ogmios
-            .submit_tx(hex::encode(tx.tx_hash.0), &minicbor::to_vec(&conway_tx)?)
+            .submit_tx(&minicbor::to_vec(&conway_tx)?)
             .await?
     } else {
         direct_to_node
-            .submit_tx(hex::encode(tx.tx_hash.0), &minicbor::to_vec(&conway_tx)?)
+            .submit_tx(&minicbor::to_vec(&conway_tx)?)
             .await?
     };
 

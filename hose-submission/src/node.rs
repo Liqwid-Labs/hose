@@ -1,46 +1,41 @@
-use pallas::applying::{CertState, Environment, UTxOs, ValidationResult};
-use pallas::ledger::primitives::NetworkId;
-use pallas::ledger::traverse::{Era, MultiEraTx};
-use pallas::network::facades::NodeClient;
-use pallas::network::miniprotocols::localstate::queries_v16::{
-    get_chain_point, get_current_era, get_current_pparams,
-};
-use pallas::network::miniprotocols::localtxsubmission::{RejectReason, Response};
-use pallas::network::miniprotocols::txmonitor::TxId;
-use pallas::network::miniprotocols::Point;
-use pallas::network::miniprotocols::{self, localtxsubmission::EraTx, MAINNET_MAGIC};
+use std::path::PathBuf;
 
-use crate::config::Config;
-use crate::params;
+use pallas::applying::{CertState, Environment, UTxOs, ValidationResult};
+use pallas::ledger::traverse::{Era, MultiEraTx};
+use pallas::network::facades;
+use pallas::network::miniprotocols::localstate::queries_v16::{ get_chain_point, get_current_era };
+use pallas::network::miniprotocols::localtxsubmission::Response;
+use pallas::network::miniprotocols::Point;
+use pallas::network::miniprotocols::localtxsubmission::EraTx;
 
 use super::SubmitTx;
+use hose_primitives::NetworkId;
 
 /// A client that uses NodeClient directly and validates locally.
-pub struct DirectToNode<'a> {
-    pub config: &'a Config,
+pub struct NodeClient<'a> {
+    pub network: NetworkId,
+    pub socket_path: PathBuf,
     pub betterfrost_client: &'a betterfrost_client::Client,
 }
 
-impl<'a> DirectToNode<'a> {
-    pub fn new(config: &'a Config, betterfrost_client: &'a betterfrost_client::Client) -> Self {
+impl<'a> NodeClient<'a> {
+    pub fn new(network: NetworkId, socket_path: PathBuf, betterfrost_client: &'a betterfrost_client::Client) -> Self {
         Self {
-            config,
+            network,
+            socket_path,
             betterfrost_client,
         }
     }
 }
 
-impl SubmitTx for DirectToNode<'_> {
+impl SubmitTx for NodeClient<'_> {
     type Error = anyhow::Error;
 
     async fn submit_tx(
         &mut self,
-        tx_id: TxId,
         cbor: &[u8],
-    ) -> std::result::Result<TxId, Self::Error> {
-        println!("Submitting transaction with id {}", &tx_id);
-
-        let mut client = NodeClient::connect("/tmp/node.socket", MAINNET_MAGIC).await?;
+    ) -> std::result::Result<(), Self::Error> {
+        let mut client = facades::NodeClient::connect(&self.socket_path, self.network.magic().into()).await?;
 
         let statequery = client.statequery();
         statequery.acquire(None).await?;
@@ -57,22 +52,19 @@ impl SubmitTx for DirectToNode<'_> {
         println!("Current chain tip slot: {:?}", chain_tip_slot);
         println!("Current era: {}", named_era);
 
-        let network_magic = self.config.network.network_magic();
-
         let multi_era_tx = MultiEraTx::decode_for_era(named_era, cbor)?;
 
         let utxos = query_utxos(&multi_era_tx, self.betterfrost_client).await?;
 
         let validation_environment = Environment {
             block_slot: chain_tip_slot,
-            prot_magic: network_magic,
-            network_id: self.config.network.clone().into(),
-            prot_params: params::get_protocol_parameters(self.config.network.clone().into())?,
+            prot_magic: self.network.magic(),
+            network_id: self.network.into(),
+            prot_params: self.network.into(),
             acnt: None,
         };
 
         let validation_result = validate_tx(validation_environment, utxos, multi_era_tx)?;
-
         println!("{:?}", validation_result);
 
         // Actually submitting the transaction
@@ -84,15 +76,9 @@ impl SubmitTx for DirectToNode<'_> {
         match response {
             Response::Accepted => println!("OK."),
             Response::Rejected(reason) => println!("Rejected: {:?}", hex::encode(reason.0)),
-        }
+        };
 
-        let monitor = client.monitor();
-        monitor.acquire().await?;
-        let res = monitor.query_has_tx(tx_id.clone()).await?;
-        println!("has_tx: {:?}", res);
-        monitor.release().await?;
-
-        Ok(tx_id)
+        Ok(())
     }
 }
 

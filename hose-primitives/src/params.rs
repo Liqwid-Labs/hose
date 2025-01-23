@@ -1,48 +1,45 @@
-use std::path::PathBuf;
-
+use crate::network::NetworkId;
 use pallas::{
-    applying::utils::{
-        AlonzoProtParams, BabbageProtParams, ConwayProtParams, MultiEraProtocolParameters,
-        ShelleyProtParams,
-    },
+    applying::utils::{AlonzoProtParams, BabbageProtParams, ConwayProtParams, ShelleyProtParams},
     ledger::{
         configs::{alonzo, conway, shelley},
-        primitives::{alonzo::Language as AlonzoLanguage, NetworkId},
+        primitives::alonzo::Language as AlonzoLanguage,
     },
 };
 
-macro_rules! apply_field {
-    ($target:ident, $update:ident, $field:ident) => {
-        paste::paste! {
-            if let Some(new) = $update.[<first_proposed_ $field>]() {
-                debug!(
-                    ?new,
-                    param = stringify!($field),
-                    "found new update proposal"
-                );
+pub use pallas::applying::utils::MultiEraProtocolParameters;
 
-                $target.$field = new;
-            }
-        }
-    };
-}
+const MAINNET_SHELLEY: &str = include_str!("../configs/mainnet/shelley.json");
+const MAINNET_ALONZO: &str = include_str!("../configs/mainnet/alonzo.json");
+const MAINNET_CONWAY: &str = include_str!("../configs/mainnet/conway.json");
 
-pub fn get_protocol_parameters(network: NetworkId) -> anyhow::Result<MultiEraProtocolParameters> {
-    let network = match network {
-        NetworkId::Mainnet => "mainnet",
-        NetworkId::Testnet => "preview",
+const PREVIEW_SHELLEY: &str = include_str!("../configs/preview/shelley.json");
+const PREVIEW_ALONZO: &str = include_str!("../configs/preview/alonzo.json");
+const PREVIEW_CONWAY: &str = include_str!("../configs/preview/conway.json");
+
+pub fn get_protocol_parameters(network: NetworkId) -> MultiEraProtocolParameters {
+    let (shelley_str, alonzo_str, conway_str) = match network {
+        NetworkId::Mainnet => (MAINNET_SHELLEY, MAINNET_ALONZO, MAINNET_CONWAY),
+        NetworkId::Testnet => (PREVIEW_SHELLEY, PREVIEW_ALONZO, PREVIEW_CONWAY),
     };
-    let root = PathBuf::from(format!("configs/{network}"));
-    let shelley = shelley::from_file(&root.join("shelley.json"))?;
-    let alonzo = alonzo::from_file(&root.join("alonzo.json"))?;
-    let conway = conway::from_file(&root.join("conway.json"))?;
+
+    // TODO: test unwrap at compile time
+    let shelley: shelley::GenesisFile = serde_json::from_str(shelley_str).unwrap();
+    let alonzo: alonzo::GenesisFile = serde_json::from_str(alonzo_str).unwrap();
+    let conway: conway::GenesisFile = serde_json::from_str(conway_str).unwrap();
 
     let shelley_params = bootstrap_shelley_pparams(&shelley);
     let alonzo_params = bootstrap_alonzo_pparams(shelley_params, &alonzo);
     let babbage_params = bootstrap_babbage_pparams(alonzo_params);
     let conway_params = bootstrap_conway_pparams(babbage_params, &conway);
 
-    Ok(MultiEraProtocolParameters::Conway(conway_params))
+    MultiEraProtocolParameters::Conway(conway_params)
+}
+
+impl From<NetworkId> for MultiEraProtocolParameters {
+    fn from(network: NetworkId) -> Self {
+        get_protocol_parameters(network)
+    }
 }
 
 fn bootstrap_shelley_pparams(shelley: &shelley::GenesisFile) -> ShelleyProtParams {
