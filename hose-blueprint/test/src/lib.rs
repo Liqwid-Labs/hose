@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use blueprint::generate_cbor_struct;
+    use hose_blueprint::generate_cbor_struct;
     use pallas::codec::utils::AnyUInt;
 
-    generate_cbor_struct!("../blueprint/plutus.json");
+    generate_cbor_struct!("./plutus.json");
 
     #[test]
     fn test_generate_cbor_struct() {

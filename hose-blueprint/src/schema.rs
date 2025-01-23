@@ -83,7 +83,7 @@ mod tests {
 
     #[test]
     fn test_parse_blueprint_schema() {
-        let contents = include_str!("../../blueprint/plutus.json");
+        let contents = include_str!("../plutus.json");
 
         println!("{}", contents);
         let schema: BlueprintSchema = serde_json::from_str(contents).unwrap();

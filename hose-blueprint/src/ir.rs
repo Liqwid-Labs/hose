@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 
-use crate::safe_rename::{UnsafeName, UnsafeRef};
+use crate::safe_rename::{SafeRename, UnsafeName, UnsafeRef};
 use crate::schema;
 
 // Represented as `path0::path1::path2::name`
@@ -70,7 +70,7 @@ impl Ref {
 }
 
 #[cfg(test)]
-mod test {
+mod tests_ref {
     use crate::ir::Ref;
 
     #[test]
@@ -167,7 +167,7 @@ pub enum Constructor {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Definition {
     // enum A { A { a, b }, B { c, d } }
-    Variant(HashMap<String, Primitive>),
+    Variant(HashMap<String, (usize, Constructor)>),
 
     // struct A { a: A, b: B } // do decode with `Constr` tag
     TaggedConstructor(usize, Constructor),
@@ -220,7 +220,7 @@ pub fn convert_to_primitive(schema: &schema::TypeSchema) -> anyhow::Result<Primi
 }
 
 #[cfg(test)]
-mod tests {
+mod tests_convert {
     use super::*;
 
     #[test]
@@ -322,9 +322,230 @@ pub fn collect_primitive_definitions(
                     primitives.insert(ref_.clone(), Primitive::Tuple(items));
                 }
             },
-            _ => todo!("Missing implementation for: {:?}", definition),
         }
     }
 
     Ok(primitives)
+}
+
+pub fn type_schema_title(schema: &schema::TypeSchema) -> Option<UnsafeName> {
+    match schema {
+        schema::TypeSchema::OpaqueData { title, .. } => Some(title.clone()),
+        schema::TypeSchema::Tagged(schema::TypeSchemaTagged::Constructor { title, .. }) => {
+            Some(title.clone())
+        }
+        schema::TypeSchema::Tagged(schema::TypeSchemaTagged::Int { .. }) => None,
+        schema::TypeSchema::Tagged(schema::TypeSchemaTagged::List { .. }) => None,
+        schema::TypeSchema::Tagged(schema::TypeSchemaTagged::Bytes { .. }) => None,
+        schema::TypeSchema::Variants { title, .. } => Some(title.clone()),
+        schema::TypeSchema::Reference { title, .. } => title.clone(),
+    }
+}
+
+pub fn schema_to_constructor(fields: Vec<schema::TypeSchema>) -> anyhow::Result<Constructor> {
+    let all_fields_have_title = fields
+        .iter()
+        .all(|schema| type_schema_title(schema).is_some());
+    if all_fields_have_title {
+        let fields: Vec<Result<(String, Primitive), anyhow::Error>> = fields
+            .iter()
+            .map(|field| {
+                let field_title = type_schema_title(field)
+                    .expect("Need title in field, and we checked!")
+                    .safe_rename();
+                let field_type = field.clone();
+
+                let field_type = convert_to_primitive(&field_type)?;
+
+                Ok((field_title, field_type))
+            })
+            .collect::<Vec<_>>();
+
+        let fields = fields.into_iter().collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Constructor::Named(fields))
+    } else {
+        let fields: Vec<Result<Primitive, anyhow::Error>> = fields
+            .iter()
+            .map(|field| {
+                let field_type = field.clone();
+
+                convert_to_primitive(&field_type)
+            })
+            .collect::<Vec<_>>();
+
+        let fields = fields.into_iter().collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Constructor::Unnamed(fields))
+    }
+}
+
+pub fn collect_definitions(blueprint: &schema::BlueprintSchema) -> anyhow::Result<Definitions> {
+    let mut definitions = Definitions::new();
+
+    let primitives = collect_primitive_definitions(blueprint)?;
+
+    for (name, definition) in blueprint.definitions.clone() {
+        match definition {
+            schema::TypeSchema::Variants { title, any_of } => {
+                let all_are_constructors = any_of.iter().all(|x| {
+                    matches!(
+                        x,
+                        schema::TypeSchema::Tagged(schema::TypeSchemaTagged::Constructor { .. })
+                    )
+                });
+
+                if !all_are_constructors {
+                    todo!("Gracefully handle non-constructor variants");
+                }
+
+                let mut variants = HashMap::<String, (usize, Constructor)>::new();
+
+                match &any_of[..] {
+                    // Special treatment for single-variant constructors, because they become
+                    // `struct`, rather than `enum`.
+                    [schema::TypeSchema::Tagged(schema::TypeSchemaTagged::Constructor {
+                        // Constructor is already named by the top level title
+                        title: _constructor_title,
+                        index,
+                        fields,
+                    })] => {
+                        let constructor = schema_to_constructor(fields.clone())?;
+                        definitions.insert(
+                            Ref::parse_from_name(name.clone().unsafe_unwrap())?,
+                            Definition::TaggedConstructor(*index, constructor),
+                        );
+                    }
+                    // All other variants become `enum`s.
+                    _ => {
+                        for constructor in any_of {
+                            if let schema::TypeSchema::Tagged(
+                                schema::TypeSchemaTagged::Constructor {
+                                    title: constructor_title,
+                                    index,
+                                    fields,
+                                },
+                            ) = constructor
+                            {
+                                let constructor = schema_to_constructor(fields)?;
+
+                                variants.insert(
+                                    constructor_title.clone().safe_rename(),
+                                    (index, constructor),
+                                );
+                            } else {
+                                todo!("Gracefully handle non-constructor variants");
+                            }
+                        }
+
+                        definitions.insert(
+                            Ref::parse_from_name(name.clone().unsafe_unwrap())?,
+                            Definition::Variant(variants),
+                        );
+                    }
+                }
+            }
+            schema::TypeSchema::Tagged(schema::TypeSchemaTagged::Constructor {
+                title: _,
+                index,
+                fields,
+            }) => {
+                let constructor = schema_to_constructor(fields.clone())?;
+                definitions.insert(
+                    Ref::parse_from_name(name.clone().unsafe_unwrap())?,
+                    Definition::TaggedConstructor(index, constructor),
+                );
+            }
+            _ => todo!("Missing implementation for: {:?}", definition),
+        }
+    }
+
+    Ok(definitions)
+}
+
+#[cfg(test)]
+mod tests_collect_definitions {
+    use schema::{BlueprintSchema, Preamble, TypeSchema};
+
+    use super::*;
+
+    #[test]
+    fn structs() {
+        let blueprint = BlueprintSchema {
+            preamble: Preamble {
+                title: "Preamble".to_string(),
+                description: "".to_string(),
+                version: "".to_string(),
+                plutus_version: "1".to_string(),
+                license: "".to_string(),
+            },
+            definitions: HashMap::from([
+                (
+                    "liqwid/types/ActionValue".to_string().into(),
+                    TypeSchema::Tagged(schema::TypeSchemaTagged::Constructor {
+                        title: "ActionValue".to_string().into(),
+                        index: 0,
+                        fields: Vec::from([
+                            TypeSchema::Tagged(schema::TypeSchemaTagged::Int),
+                            TypeSchema::Tagged(schema::TypeSchemaTagged::Int),
+                        ]),
+                    }),
+                ),
+                (
+                    "liqwid/types/Action".to_string().into(),
+                    TypeSchema::Variants {
+                        title: "Action".to_string().into(),
+                        any_of: Vec::from([
+                            TypeSchema::Tagged(schema::TypeSchemaTagged::Constructor {
+                                title: "ActionValue".to_string().into(),
+                                index: 0,
+                                fields: Vec::from([
+                                    TypeSchema::Tagged(schema::TypeSchemaTagged::Int),
+                                    TypeSchema::Tagged(schema::TypeSchemaTagged::Int),
+                                ]),
+                            }),
+                            TypeSchema::Tagged(schema::TypeSchemaTagged::Constructor {
+                                title: "AlsoActionValue".to_string().into(),
+                                index: 1,
+                                fields: Vec::from([
+                                    TypeSchema::Tagged(schema::TypeSchemaTagged::Int),
+                                    TypeSchema::Tagged(schema::TypeSchemaTagged::Int),
+                                ]),
+                            }),
+                        ]),
+                    },
+                ),
+            ]),
+        };
+
+        let definitions = collect_definitions(&blueprint).unwrap();
+
+        assert_eq!(
+            definitions[&Ref::new(&["liqwid", "types"], "ActionValue")].clone(),
+            Definition::TaggedConstructor(
+                0,
+                Constructor::Unnamed(vec![Primitive::Int, Primitive::Int])
+            )
+        );
+
+        assert_eq!(
+            definitions[&Ref::new(&["liqwid", "types"], "Action")].clone(),
+            Definition::Variant(HashMap::from([
+                (
+                    "ActionValue".to_string(),
+                    (
+                        0,
+                        Constructor::Unnamed(vec![Primitive::Int, Primitive::Int])
+                    )
+                ),
+                (
+                    "AlsoActionValue".to_string(),
+                    (
+                        1,
+                        Constructor::Unnamed(vec![Primitive::Int, Primitive::Int])
+                    )
+                ),
+            ]))
+        );
+    }
 }
