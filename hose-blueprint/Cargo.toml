@@ -1,5 +1,5 @@
 [package]
-name = "blueprint-test"
+name = "hose-blueprint"
 version = "0.1.0"
 edition = "2021"
 
@@ -11,10 +11,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 quote = "1.0"
 syn = { version = "2.0", features = ["full"] }
+pallas = { git = "https://github.com/txpipe/pallas" }
 proc-macro2 = "1.0"
 heck = "0.5.0"
-
-pallas = { path = "../../pallas/pallas", features = ["applying", "unstable"] }
-minicbor = "0.25.1"
-
-blueprint = { path = "../blueprint" }
+anyhow = "1.0"
