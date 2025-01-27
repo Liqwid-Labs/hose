@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
+use quote::{format_ident, quote, ToTokens};
 
-use crate::safe_rename::{SafeRename, UnsafeName, UnsafeRef};
+use crate::safe_rename::{self, SafeRename, UnsafeName, UnsafeRef};
 use crate::schema;
 
 // Represented as `path0::path1::path2::name`
@@ -28,14 +28,28 @@ impl Ref {
 
 impl ToTokens for Ref {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let path = self.path.clone();
-        let name = self.name.clone();
-        tokens.extend(quote! { #(#path)::* #name });
+        let path = self
+            .path
+            .clone()
+            .into_iter()
+            .map(|p| format_ident!("{}", p));
+        let name = format_ident!("{}", self.name.clone());
+        if self.path.is_empty() {
+            tokens.extend(quote! { #name });
+        } else {
+            tokens.extend(quote! { #(#path)::* :: #name });
+        }
     }
 }
 
 impl Ref {
     pub fn parse_from_name(full_name: String) -> anyhow::Result<Self> {
+        if full_name.contains("$") {
+            return Ok(Self::new(
+                &[],
+                &safe_rename::UnsafeName::from(full_name).safe_rename(),
+            ));
+        }
         let full_module_path = full_name
             .split("/")
             .map(String::from)
@@ -45,10 +59,12 @@ impl Ref {
         let (module_path, name) = full_module_path.split_at(full_module_path.len() - 1);
         let module_path = module_path
             .iter()
-            .map(|x| x.to_string())
+            .map(|x| safe_rename::UnsafeName::from(x.to_string()).safe_rename())
             .collect::<Vec<String>>();
 
         let name = name.join("_");
+
+        let name = safe_rename::UnsafeName::from(name).safe_rename();
 
         Ok(Self {
             name,
@@ -102,6 +118,12 @@ mod tests_ref {
     }
 }
 
+trait Inline {
+    fn inline_with(&self, primitives: &Primitives) -> anyhow::Result<Self>
+    where
+        Self: Sized;
+}
+
 // These will inline into the generated structs
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Primitive {
@@ -138,6 +160,40 @@ pub enum Primitive {
     Bytes,
 }
 
+impl Inline for Primitive {
+    fn inline_with(&self, primitives: &Primitives) -> anyhow::Result<Self> {
+        match self {
+            Primitive::List(inner) => Ok(Primitive::List(Box::new(inner.inline_with(primitives)?))),
+            Primitive::Tuple(inner) => Ok(Primitive::Tuple(
+                inner
+                    .iter()
+                    .map(|inner| inner.inline_with(primitives))
+                    .collect::<Result<Vec<_>, _>>()?,
+            )),
+            Primitive::Map(inner, inner2) => Ok(Primitive::Map(
+                Box::new(inner.inline_with(primitives)?),
+                Box::new(inner2.inline_with(primitives)?),
+            )),
+            Primitive::Option(inner) => {
+                Ok(Primitive::Option(Box::new(inner.inline_with(primitives)?)))
+            }
+            Primitive::WrappedRedeemer(inner) => Ok(Primitive::WrappedRedeemer(Box::new(
+                inner.inline_with(primitives)?,
+            ))),
+            Primitive::Ref(ref_) => {
+                let primitive = primitives.get(ref_).ok_or(anyhow::anyhow!(
+                    "Could not find primitive for ref: {:?}",
+                    ref_
+                ))?;
+                Ok(primitive.clone())
+            }
+            Primitive::OpaqueData => Ok(Primitive::OpaqueData),
+            Primitive::Int => Ok(Primitive::Int),
+            Primitive::Bytes => Ok(Primitive::Bytes),
+        }
+    }
+}
+
 impl ToTokens for Primitive {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         tokens.extend(match self {
@@ -164,6 +220,54 @@ pub enum Constructor {
     Unnamed(Vec<Primitive>),
 }
 
+impl Inline for Constructor {
+    fn inline_with(&self, primitives: &Primitives) -> anyhow::Result<Self> {
+        match self {
+            Constructor::Named(fields) => {
+                let fields = fields
+                    .clone()
+                    .iter()
+                    .map(|(name, primitive)| {
+                        let primitive = primitive.inline_with(primitives)?;
+                        Ok::<_, anyhow::Error>((name.clone(), primitive))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                Ok(Constructor::Named(fields))
+            }
+            Constructor::Unnamed(fields) => {
+                let fields = fields
+                    .clone()
+                    .iter()
+                    .map(|primitive| primitive.inline_with(primitives))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                Ok(Constructor::Unnamed(fields))
+            }
+        }
+    }
+}
+
+impl ToTokens for Constructor {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(match self {
+            Constructor::Named(fields) => {
+                let fields = fields.iter().map(|(name, primitive)| {
+                    let name = format_ident!("{}", name);
+                    quote! { #name: #primitive }
+                });
+
+                quote! { { #(#fields),* } }
+            }
+            Constructor::Unnamed(fields) => {
+                let fields = fields.iter().map(|primitive| quote! { #primitive });
+
+                quote! { ( #(#fields),* ) }
+            }
+        });
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Definition {
     // enum A { A { a, b }, B { c, d } }
@@ -173,7 +277,76 @@ pub enum Definition {
     TaggedConstructor(usize, Constructor),
 
     // struct Foo { a: A, b: B } // don't decode with `Constr` tag
-    UntaggedConstructor(Vec<(String, Primitive)>),
+    UntaggedConstructor(Constructor),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NamedDefinition {
+    pub name: String,
+    pub definition: Definition,
+}
+
+impl ToTokens for NamedDefinition {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let definition_name = format_ident!("{}", self.name.clone());
+        match &self.definition {
+            Definition::Variant(variants) => {
+                let variants = variants
+                    .iter()
+                    .map(|(name, (index, constructor))| {
+                        let name = format_ident!("{}", name);
+                        // TODO: Give it a Tag in CBOR!
+                        quote! { #name #constructor }
+                    })
+                    .collect::<Vec<_>>();
+
+                let variants = quote! { { #(#variants),* } };
+
+                tokens.extend(quote! { pub enum #definition_name #variants });
+            }
+            Definition::TaggedConstructor(index, constructor) => {
+                // TODO: Give it a Tag in CBOR!
+                tokens.extend(quote! { pub struct #definition_name #constructor });
+                if let Constructor::Unnamed(fields) = constructor {
+                    tokens.extend(quote! { ; });
+                }
+            }
+            Definition::UntaggedConstructor(constructor) => {
+                let name = format_ident!("{}", self.name.clone());
+                tokens.extend(quote! { pub struct #definition_name #constructor });
+                if let Constructor::Unnamed(fields) = constructor {
+                    tokens.extend(quote! { ; });
+                }
+            }
+        }
+    }
+}
+
+impl Inline for Definition {
+    fn inline_with(&self, primitives: &Primitives) -> anyhow::Result<Self> {
+        match self {
+            Definition::Variant(variants) => {
+                let variants = variants
+                    .clone()
+                    .into_iter()
+                    .map(|(name, (index, constructor))| {
+                        let constructor = constructor.inline_with(primitives)?;
+                        Ok::<_, anyhow::Error>((name, (index, constructor)))
+                    })
+                    .collect::<Result<HashMap<_, _>, anyhow::Error>>()?;
+
+                Ok(Definition::Variant(variants))
+            }
+            Definition::TaggedConstructor(index, constructor) => {
+                let constructor = constructor.inline_with(primitives)?;
+                Ok(Definition::TaggedConstructor(*index, constructor))
+            }
+            Definition::UntaggedConstructor(constructor) => {
+                let constructor = constructor.inline_with(primitives)?;
+                Ok(Definition::UntaggedConstructor(constructor))
+            }
+        }
+    }
 }
 
 // mod a {
@@ -203,7 +376,7 @@ pub fn convert_to_primitive(schema: &schema::TypeSchema) -> anyhow::Result<Primi
         schema::TypeSchema::OpaqueData { .. } => Ok(Primitive::OpaqueData),
         schema::TypeSchema::Tagged(schema::TypeSchemaTagged::Int) => Ok(Primitive::Int),
         schema::TypeSchema::Tagged(schema::TypeSchemaTagged::Bytes) => Ok(Primitive::Bytes),
-        schema::TypeSchema::Tagged(schema::TypeSchemaTagged::List { items }) => {
+        schema::TypeSchema::Tagged(schema::TypeSchemaTagged::List { title: _, items }) => {
             match items {
                 schema::ListItems::Monomorphic(items) => {
                     Ok(Primitive::List(Box::new(convert_to_primitive(items)?)))
@@ -227,6 +400,7 @@ mod tests_convert {
     fn list_int() {
         // List<Int>
         let schema = schema::TypeSchema::Tagged(schema::TypeSchemaTagged::List {
+            title: None,
             items: schema::ListItems::Monomorphic(Box::new(schema::TypeSchema::Tagged(
                 schema::TypeSchemaTagged::Int,
             ))),
@@ -241,6 +415,7 @@ mod tests_convert {
     fn tuple_opaque_data_and_bytes() {
         // Tuple<OpaqueData, Bytes>
         let schema = schema::TypeSchema::Tagged(schema::TypeSchemaTagged::List {
+            title: None,
             items: schema::ListItems::Polymorphic(vec![
                 schema::TypeSchema::OpaqueData {
                     title: "OpaqueData".to_string().into(),
@@ -288,9 +463,29 @@ pub fn collect_primitive_definitions(
         let ref_ = Ref::parse_from_name(name.clone().unsafe_unwrap())?;
 
         match definition {
-            schema::TypeSchema::Variants { .. } => {
-                // Do not inline variants
-                primitives.insert(ref_.clone(), Primitive::Ref(ref_));
+            schema::TypeSchema::Variants { title, any_of } => {
+                if title.clone().safe_rename() == "Optional" && any_of.len() == 2 {
+                    // Optional does get inlined using Rust type
+                    let inner = any_of.first().expect("Misformed Optional");
+
+                    if let schema::TypeSchema::Tagged(schema::TypeSchemaTagged::Constructor {
+                        title: _,
+                        index,
+                        fields,
+                    }) = inner
+                    {
+                        let inner = fields.first().expect("Misformed Optional");
+
+                        let inner = convert_to_primitive(inner)?;
+
+                        primitives.insert(ref_.clone(), Primitive::Option(Box::new(inner)));
+                    } else {
+                        anyhow::bail!("Misformed Optional");
+                    }
+                } else {
+                    // Do not inline variants
+                    primitives.insert(ref_.clone(), Primitive::Ref(ref_));
+                }
             }
             schema::TypeSchema::Tagged(schema::TypeSchemaTagged::Constructor { .. }) => {
                 // Do not inline constructors
@@ -309,19 +504,23 @@ pub fn collect_primitive_definitions(
             schema::TypeSchema::OpaqueData { .. } => {
                 primitives.insert(ref_.clone(), Primitive::OpaqueData);
             }
-            schema::TypeSchema::Tagged(schema::TypeSchemaTagged::List { items }) => match items {
-                schema::ListItems::Monomorphic(items) => {
-                    let items = convert_to_primitive(items)?;
-                    primitives.insert(ref_.clone(), Primitive::List(Box::new(items)));
+            schema::TypeSchema::Tagged(schema::TypeSchemaTagged::List { title: _, items }) => {
+                match items {
+                    schema::ListItems::Monomorphic(items) => {
+                        let items = convert_to_primitive(items)?;
+                        primitives.insert(ref_.clone(), Primitive::List(Box::new(items)));
+                    }
+                    schema::ListItems::Polymorphic(items) => {
+                        println!("Inlining Tuple: {:?}", ref_.clone());
+                        let items = items
+                            .iter()
+                            .map(convert_to_primitive)
+                            .collect::<Result<_, _>>()?;
+
+                        primitives.insert(ref_.clone(), Primitive::Tuple(items));
+                    }
                 }
-                schema::ListItems::Polymorphic(items) => {
-                    let items = items
-                        .iter()
-                        .map(convert_to_primitive)
-                        .collect::<Result<_, _>>()?;
-                    primitives.insert(ref_.clone(), Primitive::Tuple(items));
-                }
-            },
+            }
         }
     }
 
@@ -399,6 +598,11 @@ pub fn collect_definitions(blueprint: &schema::BlueprintSchema) -> anyhow::Resul
                     todo!("Gracefully handle non-constructor variants");
                 }
 
+                if title.clone().safe_rename() == "Optional" {
+                    // Optional does get inlined using Rust type
+                    continue;
+                }
+
                 let mut variants = HashMap::<String, (usize, Constructor)>::new();
 
                 match &any_of[..] {
@@ -445,6 +649,26 @@ pub fn collect_definitions(blueprint: &schema::BlueprintSchema) -> anyhow::Resul
                     }
                 }
             }
+            schema::TypeSchema::Tagged(schema::TypeSchemaTagged::List {
+                title,
+                items: schema::ListItems::Polymorphic(items),
+            }) => {
+                let constructor = schema_to_constructor(items)?;
+
+                if let Some(title) = title {
+                    if title.clone().safe_rename() == "Tuple" {
+                        println!("Skipping Tuple {}", name.safe_rename());
+                        // Probably shouldn't use 'continue'. But we skip Tuples and inline them
+                        // instead because they have bad names.
+                        continue;
+                    }
+                }
+
+                definitions.insert(
+                    Ref::parse_from_name(name.clone().unsafe_unwrap())?,
+                    Definition::UntaggedConstructor(constructor),
+                );
+            }
             schema::TypeSchema::Tagged(schema::TypeSchemaTagged::Constructor {
                 title: _,
                 index,
@@ -456,9 +680,32 @@ pub fn collect_definitions(blueprint: &schema::BlueprintSchema) -> anyhow::Resul
                     Definition::TaggedConstructor(index, constructor),
                 );
             }
+            schema::TypeSchema::Tagged(
+                schema::TypeSchemaTagged::List {
+                    title: _,
+                    items: schema::ListItems::Monomorphic(_),
+                }
+                | schema::TypeSchemaTagged::Int
+                | schema::TypeSchemaTagged::Bytes,
+            )
+            | schema::TypeSchema::Reference { .. } => {
+                // We don't need to do anything since these are inlined.
+            }
+            schema::TypeSchema::OpaqueData { .. } => {
+                // We don't need to do anything since these are inlined.
+            }
+
             _ => todo!("Missing implementation for: {:?}", definition),
         }
     }
+
+    let definitions = definitions
+        .into_iter()
+        .map(|(name, definition)| {
+            let definition = definition.inline_with(&primitives)?;
+            Ok::<_, anyhow::Error>((name, definition))
+        })
+        .collect::<Result<Definitions, _>>()?;
 
     Ok(definitions)
 }
@@ -491,6 +738,16 @@ mod tests_collect_definitions {
                         ]),
                     }),
                 ),
+                // Example List<Int> alias
+                (
+                    "liqwid/types/ListInt".to_string().into(),
+                    TypeSchema::Tagged(schema::TypeSchemaTagged::List {
+                        title: None,
+                        items: schema::ListItems::Monomorphic(Box::new(TypeSchema::Tagged(
+                            schema::TypeSchemaTagged::Int,
+                        ))),
+                    }),
+                ),
                 (
                     "liqwid/types/Action".to_string().into(),
                     TypeSchema::Variants {
@@ -501,7 +758,12 @@ mod tests_collect_definitions {
                                 index: 0,
                                 fields: Vec::from([
                                     TypeSchema::Tagged(schema::TypeSchemaTagged::Int),
-                                    TypeSchema::Tagged(schema::TypeSchemaTagged::Int),
+                                    TypeSchema::Reference {
+                                        title: None,
+                                        reference: "#/definitions/liqwid~1types~1ListInt"
+                                            .to_string()
+                                            .into(),
+                                    },
                                 ]),
                             }),
                             TypeSchema::Tagged(schema::TypeSchemaTagged::Constructor {
@@ -528,6 +790,9 @@ mod tests_collect_definitions {
             )
         );
 
+        // This should not be present in the definitions, since it's an alias
+        assert!(!definitions.contains_key(&Ref::new(&["liqwid", "types"], "ListInt")));
+
         assert_eq!(
             definitions[&Ref::new(&["liqwid", "types"], "Action")].clone(),
             Definition::Variant(HashMap::from([
@@ -535,7 +800,10 @@ mod tests_collect_definitions {
                     "ActionValue".to_string(),
                     (
                         0,
-                        Constructor::Unnamed(vec![Primitive::Int, Primitive::Int])
+                        Constructor::Unnamed(vec![
+                            Primitive::Int,
+                            Primitive::List(Box::new(Primitive::Int))
+                        ])
                     )
                 ),
                 (

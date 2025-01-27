@@ -3,11 +3,18 @@ name = "hose-blueprint"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "hose-blueprint"
+path = "bin/main.rs"
+
+
 [lib]
 proc-macro = true
 
 [dependencies]
 pallas = { workspace = true }
+
+hose-blueprint-internal = { path = "./internal" }
 
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

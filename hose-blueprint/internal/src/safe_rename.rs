@@ -53,11 +53,7 @@ impl SafeRename for UnsafeName {
 pub const REPLACE_SPECIAL_IDENTS: &[(&str, &str)] = &[
     ("Self", "AikenSelf"),
     ("Option", "AikenOption"),
-    ("Optional", "AikenOptional"),
-    ("List", "AikenList"),
-    ("Int", "AikenInt"),
     ("Bool", "AikenBool"),
-    ("ByteArray", "AikenByteArray"),
     ("Data", "AikenData"),
 ];
 

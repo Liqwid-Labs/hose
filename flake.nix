@@ -58,6 +58,8 @@
             rustc
             cargo-watch
             rust-analyzer
+            # NOTE(Emily): For my Cargo.toml script :')
+            (python3.withPackages (ps: with ps; [ toml ]))
           ];
         };
       });

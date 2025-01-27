@@ -10,6 +10,16 @@ pub struct BlueprintSchema {
     pub definitions: HashMap<UnsafeName, TypeSchema>,
 }
 
+impl BlueprintSchema {
+    pub fn from_file(path: &str) -> anyhow::Result<Self> {
+        let contents = std::fs::read_to_string(path)?;
+
+        let schema: Self = serde_json::from_str(&contents)?;
+
+        Ok(schema)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Preamble {
@@ -57,6 +67,7 @@ pub enum TypeSchemaTagged {
     Bytes,
     #[serde(rename = "list")]
     List {
+        title: Option<UnsafeName>,
         #[serde(rename = "items")]
         items: ListItems,
     },
@@ -83,7 +94,7 @@ mod tests {
 
     #[test]
     fn test_parse_blueprint_schema() {
-        let contents = include_str!("../plutus.json");
+        let contents = include_str!("../../plutus.json");
 
         println!("{}", contents);
         let schema: BlueprintSchema = serde_json::from_str(contents).unwrap();
