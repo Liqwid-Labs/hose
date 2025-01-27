@@ -1,10 +1,9 @@
-use std::{collections::HashMap, fs};
+use std::fs;
 
 use heck::ToSnakeCase;
 use proc_macro2::{Literal, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
 use schema::{BlueprintSchema, ListItems, TypeSchema, TypeSchemaTagged};
-use syn::{parse_macro_input, LitStr};
 
 pub mod ir;
 pub mod module;

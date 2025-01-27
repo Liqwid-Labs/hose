@@ -179,15 +179,23 @@ impl ToTokens for Constructor {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         tokens.extend(match self {
             Constructor::Named(fields) => {
-                let fields = fields.iter().map(|(name, primitive)| {
+                let fields = fields.iter().enumerate().map(|(index, (name, primitive))| {
                     let name = format_ident!("{}", name);
-                    quote! { #name: #primitive }
+                    quote! {
+                        #[n(#index)]
+                        #name: #primitive
+                    }
                 });
 
                 quote! { { #(#fields),* } }
             }
             Constructor::Unnamed(fields) => {
-                let fields = fields.iter().map(|primitive| quote! { #primitive });
+                let fields = fields.iter().enumerate().map(|(index, primitive)| {
+                    quote! {
+                        #[n(#index)]
+                        #primitive
+                    }
+                });
 
                 quote! { ( #(#fields),* ) }
             }
@@ -251,24 +259,37 @@ impl ToTokens for NamedDefinition {
                     .map(|(name, (index, constructor))| {
                         let name = format_ident!("{}", name);
                         // TODO: Give it a Tag in CBOR!
-                        quote! { #name #constructor }
+                        quote! {
+                            #[n(#index)]
+                            #[cbor(tag(#index))]
+                            #name #constructor
+                        }
                     })
                     .collect::<Vec<_>>();
 
                 let variants = quote! { { #(#variants),* } };
 
-                tokens.extend(quote! { pub enum #definition_name #variants });
+                tokens.extend(quote! {
+                    #[derive(Debug, Clone, PartialEq, Eq, minicbor::Encode, minicbor::Decode)]
+                    pub enum #definition_name #variants
+                });
             }
             Definition::TaggedConstructor(index, constructor) => {
                 // TODO: Give it a Tag in CBOR!
-                tokens.extend(quote! { pub struct #definition_name #constructor });
+                tokens.extend(quote! {
+                    #[derive(Debug, Clone, PartialEq, Eq, minicbor::Encode, minicbor::Decode)]
+                    pub struct #definition_name #constructor
+                });
                 if let Constructor::Unnamed(fields) = constructor {
                     tokens.extend(quote! { ; });
                 }
             }
             Definition::UntaggedConstructor(constructor) => {
                 let name = format_ident!("{}", self.name.clone());
-                tokens.extend(quote! { pub struct #definition_name #constructor });
+                tokens.extend(quote! {
+                    #[derive(Debug, Clone, PartialEq, Eq, minicbor::Encode, minicbor::Decode)]
+                    pub struct #definition_name #constructor
+                });
                 if let Constructor::Unnamed(fields) = constructor {
                     tokens.extend(quote! { ; });
                 }

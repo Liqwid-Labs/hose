@@ -1,12 +1,25 @@
+use quote::ToTokens;
 use syn::{parse_macro_input, LitStr};
 
-use hose_blueprint_internal::generate_cbor_struct2;
+use proc_macro2::TokenStream as TokenStream2;
+
+use hose_blueprint_internal::{ir::collect_definitions, module::Module, schema::BlueprintSchema};
 
 #[proc_macro]
-pub fn generate_cbor_struct(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn blueprint(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as LitStr);
 
     let file_path = input.value();
 
-    generate_cbor_struct2(&file_path).into()
+    let blueprint = BlueprintSchema::from_file(&file_path).unwrap();
+
+    let definitions = collect_definitions(&blueprint).unwrap();
+
+    let modules = Module::from_definitions(&definitions);
+
+    let mut tokens = TokenStream2::new();
+
+    modules.to_tokens(&mut tokens);
+
+    proc_macro::TokenStream::from(tokens)
 }
