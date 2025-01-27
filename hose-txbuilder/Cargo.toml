@@ -6,6 +6,9 @@ repository = "https://github.com/liqwid-labs/hose"
 homepage = "https://github.com/liqwid-labs/hose"
 authors = ["Emily Martins <emily@liqwid.finance>", "Liam Dyer <liam@liqwid.finance>"]
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
 pallas = { workspace = true }
 bip32 = "0.5.2"

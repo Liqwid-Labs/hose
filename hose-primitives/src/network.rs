@@ -1,5 +1,7 @@
-use pallas::ledger::primitives;
+use pallas::{applying::MultiEraProtocolParameters, ledger::primitives};
 use std::str::FromStr;
+
+use crate::get_protocol_parameters;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NetworkId {
@@ -13,6 +15,10 @@ impl NetworkId {
             NetworkId::Mainnet => 764824073,
             NetworkId::Testnet => 2,
         }
+    }
+
+    pub fn parameters(self) -> MultiEraProtocolParameters {
+        get_protocol_parameters(self)
     }
 }
 

@@ -1,15 +1,17 @@
 mod node;
 mod ogmios;
 
+use hose_primitives::UTxO;
 pub use node::NodeClient;
 pub use ogmios::OgmiosClient;
+use pallas::ledger::{addresses::Address, traverse::MultiEraOutput};
 
 pub trait SubmitTx {
     type Error;
     fn submit_tx(
         &mut self,
         cbor: &[u8],
-    ) -> impl std::future::Future<Output = std::result::Result<(), Self::Error>>;
+    ) -> impl std::future::Future<Output = Result<(), Self::Error>>;
 }
 
 pub trait EvaluateTx {
@@ -17,7 +19,15 @@ pub trait EvaluateTx {
     fn evaluate_tx(
         &mut self,
         cbor: &[u8],
-    ) -> impl std::future::Future<Output = std::result::Result<Vec<ScriptEvaluation>, Self::Error>>;
+    ) -> impl std::future::Future<Output = Result<Vec<ScriptEvaluation>, Self::Error>>;
+}
+
+pub trait QueryUTxOs {
+    type Error;
+    fn query_utxos(
+        &mut self,
+        addresses: &[Address],
+    ) -> impl std::future::Future<Output = Result<Vec<UTxO>, Self::Error>>;
 }
 
 pub enum ScriptType {

@@ -1,70 +1,16 @@
-use serde::{Deserialize, Serialize};
-
-pub enum RequestMethod {
-    SubmitTransaction,
-    EvaluateTransaction,
-    QueryLedgerStateUTxO,
-}
-
-impl From<RequestMethod> for String {
-    fn from(method: RequestMethod) -> Self {
-        match method {
-            RequestMethod::SubmitTransaction => "submitTransaction".into(),
-            RequestMethod::EvaluateTransaction => "evaluateTransaction".into(),
-            RequestMethod::QueryLedgerStateUTxO => "queryLedgerState/utxo".into(),
-        }
-    }
-}
-
-#[derive(Serialize, Debug)]
-pub struct Request {
-    pub jsonrpc: String,
-    pub method: String,
-    pub params: serde_json::Value,
-}
-
 #[derive(Deserialize, Debug)]
-pub struct ErrorResponse {
-    pub code: ErrorResponseCode,
+pub struct Error {
+    pub code: ErrorCode,
     pub message: String,
     pub data: serde_json::Value,
 }
 
-#[derive(Deserialize, Debug)]
-#[serde(untagged)]
-pub enum Response {
-    Error { error: ErrorResponse },
-    Result { result: serde_json::Value },
-}
-
 /// Errors that can occur during transaction validation and submission
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum ErrorResponseCode {
+pub enum ErrorCode {
     /// Failed to deserialize in any of the known eras
     DeserializationError = -32602,
 
-    // ----------
-    // Ledger state errors (2000-2999)
-    // ----------
-    /// Unable to acquire the ledger state at the request point.
-    AcquireFailed = 2000,
-
-    /// An era mismatch between a client request and the era the ledger is in.
-    /// This may occur when running queries on a syncing node and/or when the node is crossing an era.
-    StateEraMismatch = 2001,
-
-    /// Some query is not available for the requested ledger era.
-    UnavailableInCurrentEra = 2002,
-
-    /// Previously acquired ledger state is no longer available.
-    AcquireExpired = 2003,
-
-    /// Something went wrong (e.g. misconfiguration) in reading genesis file for the latest era.
-    InvalidGenesis = 2004,
-
-    // ----------
-    // Evaluation errors (3000-3999)
-    // ----------
     /// Returned when trying to evaluate execution units of a pre-Alonzo transaction.
     /// Note that this isn't possible with Ogmios because transactions are always de-serialized as Alonzo transactions.
     IncompatibleEra = 3000,
@@ -84,7 +30,7 @@ pub enum ErrorResponseCode {
 
     /// Failed to submit the transaction in the current era. This may happen when trying to submit
     /// a transaction near an era boundary (i.e. at the moment of a hard-fork).
-    TxEraMismatch = 3005,
+    EraMismatch = 3005,
 
     /// One or more script execution terminated with an error.
     ScriptExecutionFailure = 3010,
