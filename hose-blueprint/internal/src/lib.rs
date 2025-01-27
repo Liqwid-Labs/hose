@@ -7,6 +7,8 @@ use schema::{BlueprintSchema, ListItems, TypeSchema, TypeSchemaTagged};
 use syn::{parse_macro_input, LitStr};
 
 pub mod ir;
+pub mod module;
+pub mod reference;
 pub mod safe_rename;
 pub mod schema;
 

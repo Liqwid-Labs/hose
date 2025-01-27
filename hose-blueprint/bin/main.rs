@@ -1,9 +1,6 @@
-use std::{collections::HashMap, env};
+use std::env;
 
-use hose_blueprint_internal::{
-    ir::{collect_definitions, collect_primitive_definitions, NamedDefinition},
-    schema::{self, BlueprintSchema, Preamble, TypeSchema, TypeSchemaTagged},
-};
+use hose_blueprint_internal::{ir::collect_definitions, module::Module, schema::BlueprintSchema};
 
 use proc_macro2::TokenStream as TokenStream2;
 
@@ -20,33 +17,24 @@ fn main() {
 
     let blueprint = BlueprintSchema::from_file(path).unwrap();
 
-    let primitives = collect_primitive_definitions(&blueprint).unwrap();
-
     let definitions = collect_definitions(&blueprint).unwrap();
 
-    // println!("{definitions:#?}");
+    let modules = Module::from_definitions(&definitions);
 
-    for (name, definition) in &definitions {
-        let named_definition = NamedDefinition {
-            name: name.clone().name,
-            definition: definition.clone(),
-        };
+    let mut tokens = TokenStream2::new();
 
-        let mut tokens = TokenStream2::new();
-        named_definition.to_tokens(&mut tokens);
+    modules.to_tokens(&mut tokens);
 
-        let pretty_tokens = pretty::bat_pretty_print(&mut tokens).unwrap();
+    let pretty_tokens = pretty::bat_pretty_print(&mut tokens).unwrap();
 
-        println!("// {}::{}", name.path.join("::"), name.clone().name);
-        println!("{}", pretty_tokens);
-    }
+    println!("{}", pretty_tokens);
 }
 
 // Stolen from https://github.com/Michael-F-Bryan/scad-rs/blob/4dbff0c30ce991105f1e649e678d68c2767e894b/crates/codegen/src/pretty_print.rs#L8-L22
 pub mod pretty {
     use super::*;
     use std::io::Write;
-    use std::process::{ChildStdin, Command, Output, Stdio};
+    use std::process::{Command, Output, Stdio};
 
     pub fn pretty_print(tokens: impl ToTokens) -> anyhow::Result<String> {
         let tokens = tokens.into_token_stream().to_string();
