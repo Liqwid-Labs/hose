@@ -45,10 +45,27 @@ impl ToTokens for Ref {
 impl Ref {
     pub fn parse_from_name(full_name: String) -> anyhow::Result<Self> {
         if full_name.contains("$") {
-            return Ok(Self::new(
-                &[],
-                &safe_rename::UnsafeName::from(full_name).safe_rename(),
-            ));
+            // If the identifier contains a dollar sign, it means it's a polymorphic type.
+            // We can't yet parse those properly. See the open issue:
+            // https://github.com/aiken-lang/aiken/issues/1087
+            //
+            // For now, we just give it the full name, splitting on the first dollar sign.
+
+            let (module_path, name) = full_name.split_once("$").unwrap();
+
+            let module_path = module_path
+                .split("/")
+                .map(String::from)
+                .collect::<Vec<String>>();
+
+            let (init_name, module_path) = module_path.split_last().unwrap();
+
+            let name = format!("{}_{}", init_name, name);
+
+            return Ok(Self {
+                path: module_path.to_vec(),
+                name: safe_rename::UnsafeName::from(name.to_string()).safe_rename(),
+            });
         }
         let full_module_path = full_name
             .split("/")

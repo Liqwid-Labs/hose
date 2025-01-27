@@ -37,7 +37,7 @@ fn main() {
 
         let pretty_tokens = pretty::bat_pretty_print(&mut tokens).unwrap();
 
-        println!("// mod {}::{}", name.path.join("::"), name.clone().name);
+        println!("// {}::{}", name.path.join("::"), name.clone().name);
         println!("{}", pretty_tokens);
     }
 }
