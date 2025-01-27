@@ -60,7 +60,7 @@ impl SubmitTx for NodeClient<'_> {
             block_slot: chain_tip_slot,
             prot_magic: self.network.magic(),
             network_id: self.network.into(),
-            prot_params: self.network.into(),
+            prot_params: self.network.parameters(),
             acnt: None,
         };
 

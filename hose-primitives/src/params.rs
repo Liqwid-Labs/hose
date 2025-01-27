@@ -36,12 +36,6 @@ pub fn get_protocol_parameters(network: NetworkId) -> MultiEraProtocolParameters
     MultiEraProtocolParameters::Conway(conway_params)
 }
 
-impl From<NetworkId> for MultiEraProtocolParameters {
-    fn from(network: NetworkId) -> Self {
-        get_protocol_parameters(network)
-    }
-}
-
 fn bootstrap_shelley_pparams(shelley: &shelley::GenesisFile) -> ShelleyProtParams {
     ShelleyProtParams {
         // TODO: remove unwrap once we make the whole process fallible
