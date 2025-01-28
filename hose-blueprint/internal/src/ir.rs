@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
+use heck::{ToSnakeCase, ToUpperCamelCase};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 
 use crate::reference::Ref;
 use crate::safe_rename::{SafeRename, UnsafeName};
-use crate::schema;
+use crate::{cbor, schema};
 
 trait Inline {
     fn inline_with(&self, primitives: &Primitives) -> anyhow::Result<Self>
@@ -131,6 +132,23 @@ pub enum Constructor {
     Unnamed(Vec<Primitive>),
 }
 
+impl IntoIterator for Constructor {
+    type Item = Primitive;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> std::vec::IntoIter<Self::Item> {
+        match self {
+            Constructor::Named(fields) => fields
+                .into_iter()
+                .map(|(_, k)| k)
+                // TODO: Can we do this without allocating?
+                .collect::<Vec<_>>()
+                .into_iter(),
+            Constructor::Unnamed(fields) => fields.into_iter(),
+        }
+    }
+}
+
 impl Constructor {
     pub fn super_all(&self) -> Self {
         match self {
@@ -175,14 +193,15 @@ impl Inline for Constructor {
     }
 }
 
-impl ToTokens for Constructor {
+pub struct EnumConstructror(pub Constructor);
+
+impl ToTokens for EnumConstructror {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        tokens.extend(match self {
+        tokens.extend(match &self.0 {
             Constructor::Named(fields) => {
                 let fields = fields.iter().enumerate().map(|(index, (name, primitive))| {
-                    let name = format_ident!("{}", name);
+                    let name = format_ident!("{}", name.to_snake_case());
                     quote! {
-                        #[n(#index)]
                         #name: #primitive
                     }
                 });
@@ -192,8 +211,33 @@ impl ToTokens for Constructor {
             Constructor::Unnamed(fields) => {
                 let fields = fields.iter().enumerate().map(|(index, primitive)| {
                     quote! {
-                        #[n(#index)]
                         #primitive
+                    }
+                });
+
+                quote! { ( #(#fields),* ) }
+            }
+        });
+    }
+}
+
+impl ToTokens for Constructor {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(match self {
+            Constructor::Named(fields) => {
+                let fields = fields.iter().map(|(name, primitive)| {
+                    let name = format_ident!("{}", name.to_snake_case());
+                    quote! {
+                        pub #name: #primitive
+                    }
+                });
+
+                quote! { { #(#fields),* } }
+            }
+            Constructor::Unnamed(fields) => {
+                let fields = fields.iter().map(|primitive| {
+                    quote! {
+                        pub #primitive
                     }
                 });
 
@@ -249,19 +293,31 @@ impl NamedDefinition {
     }
 }
 
+pub fn compute_cbor_tag(index: usize) -> u64 {
+    if index < 7 {
+        (121 + index).try_into().expect("Tag too large")
+    } else if index < 128 {
+        (1280 + index - 7).try_into().expect("Tag too large")
+    } else {
+        // See: https://github.com/aiken-lang/aiken/blob/6d2e38851eb9b14cf5ea04fdc4722405b5c1544a/crates/uplc/src/ast.rs#L437
+        todo!("Constructors with more than 128 fields are not (yet) supported, you have {index}")
+    }
+}
+
 impl ToTokens for NamedDefinition {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let definition_name = format_ident!("{}", self.name.clone());
         match &self.definition {
             Definition::Variant(variants) => {
+                let cbor_impl = cbor::decode_encode_impl_enum(definition_name.clone(), variants);
+
                 let variants = variants
                     .iter()
-                    .map(|(name, (index, constructor))| {
-                        let name = format_ident!("{}", name);
+                    .map(|(name, (_, constructor))| {
+                        let name = format_ident!("{}", name.to_upper_camel_case());
+                        let constructor = EnumConstructror(constructor.clone());
                         // TODO: Give it a Tag in CBOR!
                         quote! {
-                            #[n(#index)]
-                            #[cbor(tag(#index))]
                             #name #constructor
                         }
                     })
@@ -270,29 +326,43 @@ impl ToTokens for NamedDefinition {
                 let variants = quote! { { #(#variants),* } };
 
                 tokens.extend(quote! {
-                    #[derive(Debug, Clone, PartialEq, Eq, minicbor::Encode, minicbor::Decode)]
+                    #[derive(Debug, Clone, PartialEq, Eq)]
                     pub enum #definition_name #variants
                 });
+
+                tokens.extend(cbor_impl);
             }
             Definition::TaggedConstructor(index, constructor) => {
+                let cbor_impl = cbor::decode_encode_impl_struct(
+                    definition_name.clone(),
+                    Some(*index),
+                    constructor.clone(),
+                );
                 // TODO: Give it a Tag in CBOR!
                 tokens.extend(quote! {
-                    #[derive(Debug, Clone, PartialEq, Eq, minicbor::Encode, minicbor::Decode)]
+                    #[derive(Debug, Clone, PartialEq, Eq)]
                     pub struct #definition_name #constructor
                 });
-                if let Constructor::Unnamed(fields) = constructor {
+                if let Constructor::Unnamed(_) = constructor {
                     tokens.extend(quote! { ; });
                 }
+
+                tokens.extend(cbor_impl);
             }
             Definition::UntaggedConstructor(constructor) => {
-                let name = format_ident!("{}", self.name.clone());
+                let cbor_impl = cbor::decode_encode_impl_struct(
+                    definition_name.clone(),
+                    None,
+                    constructor.clone(),
+                );
                 tokens.extend(quote! {
-                    #[derive(Debug, Clone, PartialEq, Eq, minicbor::Encode, minicbor::Decode)]
+                    #[derive(Debug, Clone, PartialEq, Eq)]
                     pub struct #definition_name #constructor
                 });
-                if let Constructor::Unnamed(fields) = constructor {
+                if let Constructor::Unnamed(_) = constructor {
                     tokens.extend(quote! { ; });
                 }
+                tokens.extend(cbor_impl);
             }
         }
     }
@@ -499,8 +569,8 @@ pub fn collect_primitive_definitions(
         }
     }
 
-    for i in 0..10 {
-        println!("Inlining primitives step {}", i);
+    // Proooobably shouldn't do it this way, but it works for now.
+    for _ in 0..10 {
         let preexisting_primitives = primitives.clone();
 
         for (_, primitive) in primitives.iter_mut() {
