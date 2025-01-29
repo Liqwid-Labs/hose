@@ -1,7 +1,7 @@
 mod node;
 mod ogmios;
 
-use hose_primitives::UTxO;
+use hose_primitives::Output;
 pub use node::NodeClient;
 pub use ogmios::OgmiosClient;
 use pallas::ledger::{addresses::Address, traverse::MultiEraOutput};
@@ -27,7 +27,7 @@ pub trait QueryUTxOs {
     fn query_utxos(
         &mut self,
         addresses: &[Address],
-    ) -> impl std::future::Future<Output = Result<Vec<UTxO>, Self::Error>>;
+    ) -> impl std::future::Future<Output = Result<Vec<Output>, Self::Error>>;
 }
 
 pub enum ScriptType {
