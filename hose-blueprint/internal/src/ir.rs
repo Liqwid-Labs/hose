@@ -400,7 +400,7 @@ impl Inline for Definition {
 //         pub type Foo = ();
 //     }
 //     pub mod d {
-//         type Z = (crate::a::c::Foo, i32);
+//         pub type Z(super::c::Foo, i32);
 //     }
 // }
 
