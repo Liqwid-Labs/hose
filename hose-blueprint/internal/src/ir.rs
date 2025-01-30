@@ -71,11 +71,11 @@ impl Inline for Primitive {
                 inner.inline_with(primitives)?,
             ))),
             Primitive::Ref(ref_) => {
-                let primitive = primitives.get(ref_).ok_or(anyhow::anyhow!(
-                    "Could not find primitive for ref: {:?}",
-                    ref_
-                ))?;
-                Ok(primitive.clone())
+                if let Some(primitive) = primitives.get(ref_) {
+                    Ok(primitive.clone())
+                } else {
+                    Ok(self.clone())
+                }
             }
             Primitive::OpaqueData => Ok(Primitive::OpaqueData),
             Primitive::Int => Ok(Primitive::Int),
@@ -550,19 +550,28 @@ pub fn collect_primitive_definitions(
             schema::TypeSchema::OpaqueData { .. } => {
                 primitives.insert(ref_.clone(), Primitive::OpaqueData);
             }
-            schema::TypeSchema::Tagged(schema::TypeSchemaTagged::List { title: _, items }) => {
+            schema::TypeSchema::Tagged(schema::TypeSchemaTagged::List { title, items }) => {
                 match items {
                     schema::ListItems::Monomorphic(items) => {
                         let items = convert_to_primitive(items)?;
                         primitives.insert(ref_.clone(), Primitive::List(Box::new(items)));
                     }
                     schema::ListItems::Polymorphic(items) => {
-                        let items = items
-                            .iter()
-                            .map(convert_to_primitive)
-                            .collect::<Result<_, _>>()?;
+                        if let Some(title) = title {
+                            // Only inline Tuples.
+                            //
+                            // TODO: This actually doesn't work! We might need to either not inline
+                            // them at all, or inline them as a custom tuple type.
+                            // This same issue applies to `Optional`.
+                            if title.clone().unsafe_unwrap() == "Tuple" {
+                                let items = items
+                                    .iter()
+                                    .map(convert_to_primitive)
+                                    .collect::<Result<_, _>>()?;
 
-                        primitives.insert(ref_.clone(), Primitive::Tuple(items));
+                                primitives.insert(ref_.clone(), Primitive::Tuple(items));
+                            }
+                        }
                     }
                 }
             }

@@ -37,6 +37,31 @@
       "hash": "8f6cd8da44f4c10c53057198593cec3a2f932f3a72de071f2bf7b58c"
     },
     {
+      "title": "liqwid.hello_world.spend",
+      "datum": {
+        "title": "datum",
+        "schema": {
+          "$ref": "#/definitions/ActionDatum"
+        }
+      },
+      "redeemer": {
+        "title": "_redeemer",
+        "schema": {
+          "$ref": "#/definitions/liqwid~1Redeemer"
+        }
+      },
+      "compiledCode": "588e01010032323232323225333002323232323253330073370e900118041baa0011323322533300a3370e900018059baa00513232533300f30110021533300c3370e900018069baa00314a22c2c6eb8c03c004c030dd50028b18060009806180680098049baa00116300a300b0033009002300800230080013004375400229309b2b2b9a5573aaae7955cfaba157441",
+      "hash": "c98e28b331f9ab1ddff212bd6a415b4dd86c9778a5101365d88e0b18"
+    },
+    {
+      "title": "liqwid.hello_world.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "compiledCode": "588e01010032323232323225333002323232323253330073370e900118041baa0011323322533300a3370e900018059baa00513232533300f30110021533300c3370e900018069baa00314a22c2c6eb8c03c004c030dd50028b18060009806180680098049baa00116300a300b0033009002300800230080013004375400229309b2b2b9a5573aaae7955cfaba157441",
+      "hash": "c98e28b331f9ab1ddff212bd6a415b4dd86c9778a5101365d88e0b18"
+    },
+    {
       "title": "stake.stake.spend",
       "datum": {
         "title": "_datum",
@@ -63,8 +88,40 @@
     }
   ],
   "definitions": {
+    "ActionDatum": {
+      "title": "ActionDatum",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/ActionValue"
+        },
+        {
+          "$ref": "#/definitions/Int"
+        }
+      ]
+    },
+    "ActionValue": {
+      "title": "ActionValue",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/Int"
+        },
+        {
+          "$ref": "#/definitions/Int"
+        },
+        {
+          "$ref": "#/definitions/Int"
+        },
+        {
+          "$ref": "#/definitions/Int"
+        },
+        {
+          "$ref": "#/definitions/Int"
+        }
+      ]
+    },
     "ByteArray": {
-      "title": "ByteArray",
       "dataType": "bytes"
     },
     "Datum": {
@@ -204,6 +261,10 @@
             {
               "title": "output",
               "$ref": "#/definitions/hello_world~1ExampleWrapper$cardano~1transaction~1OutputReference_Tuple$Int_Int"
+            },
+            {
+              "title": "tuple_example",
+              "$ref": "#/definitions/Tuple$Int_Int"
             }
           ]
         }
@@ -250,6 +311,22 @@
       ]
     },
     "hello_world/Redeemer": {
+      "title": "Redeemer",
+      "anyOf": [
+        {
+          "title": "Redeemer",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "msg",
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        }
+      ]
+    },
+    "liqwid/Redeemer": {
       "title": "Redeemer",
       "anyOf": [
         {

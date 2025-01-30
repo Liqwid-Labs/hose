@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+    use example::root::{ActionDatum, ActionValue};
     use pallas::codec::utils::{AnyUInt, Bytes};
 
     pub mod example {
@@ -9,7 +10,7 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_cbor_struct() {
+    fn test_stake_datum() {
         use example::root::DelegatedTo;
         use example::root::cardano::address::Credential;
 
@@ -39,6 +40,31 @@ mod tests {
             )
         );
         assert_eq!(proposal_locks, vec![]);
+
+        // Check if encoding it backwards is the same as the original
+        let back_to_bytes = hex::encode(minicbor::to_vec(decoded_datum).unwrap());
+
+        assert_eq!(back_to_bytes, real_datum);
+    }
+
+    #[test]
+    fn test_action_value() {
+        let real_datum =
+            String::from("9f9f1a2faf08001b00000008db42b477000000ff1b000000011efa8cb7ff");
+
+        let bytes = hex::decode(&real_datum).unwrap();
+        let decoded_datum: ActionDatum = minicbor::decode(&bytes).unwrap();
+
+        let ActionDatum( action_value, reserved_supply ) = decoded_datum.clone();
+
+        let ActionValue( supply_diff, q_tokens_diff, principal_diff, interest_diff, extra_interest_repaid ) = action_value;
+
+        assert_eq!(supply_diff, AnyUInt::U32(800_000_000));
+        assert_eq!(q_tokens_diff, AnyUInt::U64(38_038_320_247));
+        assert_eq!(principal_diff, AnyUInt::MajorByte(0));
+        assert_eq!(interest_diff, AnyUInt::MajorByte(0));
+        assert_eq!(extra_interest_repaid, AnyUInt::MajorByte(0));
+        assert_eq!(reserved_supply, AnyUInt::U64(4_814_703_799));
 
         // Check if encoding it backwards is the same as the original
         let back_to_bytes = hex::encode(minicbor::to_vec(decoded_datum).unwrap());

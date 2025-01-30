@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 
@@ -8,6 +10,12 @@ use crate::safe_rename::{self, SafeRename, UnsafeRef};
 pub struct Ref {
     pub path: Vec<String>,
     pub name: String,
+}
+
+impl Display for Ref {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}::{}", self.path.join("::"), self.name)
+    }
 }
 
 impl Ref {
