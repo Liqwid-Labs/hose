@@ -2,6 +2,7 @@
 mod tests {
     use std::str::FromStr;
     use example::root::{ActionDatum, ActionValue};
+    use hose_primitives::datatypes::BigInt;
     use pallas::codec::utils::{AnyUInt, Bytes};
 
     pub mod example {
@@ -22,7 +23,8 @@ mod tests {
 
         let example::root::Datum(staked_amount, owner, delegated_to, proposal_locks) = decoded_datum.clone();
 
-        assert_eq!(staked_amount, AnyUInt::U32(1_594_436_078u32));
+        assert_eq!(staked_amount, BigInt::from(1_594_436_078u32));
+
         assert_eq!(
             owner,
             Credential::VerificationKey(
@@ -59,12 +61,12 @@ mod tests {
 
         let ActionValue( supply_diff, q_tokens_diff, principal_diff, interest_diff, extra_interest_repaid ) = action_value;
 
-        assert_eq!(supply_diff, AnyUInt::U32(800_000_000));
-        assert_eq!(q_tokens_diff, AnyUInt::U64(38_038_320_247));
-        assert_eq!(principal_diff, AnyUInt::MajorByte(0));
-        assert_eq!(interest_diff, AnyUInt::MajorByte(0));
-        assert_eq!(extra_interest_repaid, AnyUInt::MajorByte(0));
-        assert_eq!(reserved_supply, AnyUInt::U64(4_814_703_799));
+        assert_eq!(supply_diff, BigInt::from(800_000_000));
+        assert_eq!(q_tokens_diff, BigInt::from(38_038_320_247u64));
+        assert_eq!(principal_diff, BigInt::from(0));
+        assert_eq!(interest_diff, BigInt::from(0));
+        assert_eq!(extra_interest_repaid, BigInt::from(0));
+        assert_eq!(reserved_supply, BigInt::from(4_814_703_799u64));
 
         // Check if encoding it backwards is the same as the original
         let back_to_bytes = hex::encode(minicbor::to_vec(decoded_datum).unwrap());

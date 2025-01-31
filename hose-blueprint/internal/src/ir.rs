@@ -110,7 +110,7 @@ impl ToTokens for Primitive {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         tokens.extend(match self {
             Primitive::OpaqueData => quote! { pallas::codec::utils::AnyCbor },
-            Primitive::Int => quote! { pallas::codec::utils::AnyUInt },
+            Primitive::Int => quote! { hose_primitives::datatypes::BigInt },
             Primitive::Bytes => quote! { pallas::codec::utils::Bytes },
             Primitive::List(inner) => quote! { Vec<#inner> },
             Primitive::Tuple(inner) => quote! { (#(#inner),*) },
@@ -199,7 +199,7 @@ impl ToTokens for EnumConstructror {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         tokens.extend(match &self.0 {
             Constructor::Named(fields) => {
-                let fields = fields.iter().enumerate().map(|(index, (name, primitive))| {
+                let fields = fields.iter().map(|(name, primitive)| {
                     let name = format_ident!("{}", name.to_snake_case());
                     quote! {
                         #name: #primitive
@@ -209,11 +209,7 @@ impl ToTokens for EnumConstructror {
                 quote! { { #(#fields),* } }
             }
             Constructor::Unnamed(fields) => {
-                let fields = fields.iter().enumerate().map(|(index, primitive)| {
-                    quote! {
-                        #primitive
-                    }
-                });
+                let fields = fields.iter().map(ToTokens::to_token_stream);
 
                 quote! { ( #(#fields),* ) }
             }
@@ -515,9 +511,8 @@ pub fn collect_primitive_definitions(
                     let inner = any_of.first().expect("Misformed Optional");
 
                     if let schema::TypeSchema::Tagged(schema::TypeSchemaTagged::Constructor {
-                        title: _,
-                        index,
                         fields,
+                        ..
                     }) = inner
                     {
                         let inner = fields.first().expect("Misformed Optional");
@@ -760,8 +755,6 @@ pub fn collect_definitions(blueprint: &schema::BlueprintSchema) -> anyhow::Resul
             schema::TypeSchema::OpaqueData { .. } => {
                 // We don't need to do anything since these are inlined.
             }
-
-            _ => todo!("Missing implementation for: {:?}", definition),
         }
     }
 

@@ -16,6 +16,26 @@ impl Deref for BigInt {
     }
 }
 
+macro_rules! impl_from_for_bigint {
+    ($type:ty) => {
+        impl From<$type> for BigInt {
+            fn from(value: $type) -> Self {
+                Self(num_bigint::BigInt::from(value))
+            }
+        }
+    };
+}
+
+impl_from_for_bigint!(u64);
+impl_from_for_bigint!(u32);
+impl_from_for_bigint!(u16);
+impl_from_for_bigint!(u8);
+
+impl_from_for_bigint!(i64);
+impl_from_for_bigint!(i32);
+impl_from_for_bigint!(i16);
+impl_from_for_bigint!(i8);
+
 impl From<num_bigint::BigInt> for BigInt {
     fn from(value: num_bigint::BigInt) -> Self {
         Self(value)
@@ -65,6 +85,10 @@ impl TryInto<pallas::codec::utils::AnyUInt> for BigInt {
         } else if self.0 > u8::MAX.into() {
             Ok(pallas::codec::utils::AnyUInt::U16(
                 self.0.to_u16().expect("to_u16 should not fail"),
+            ))
+        } else if self.0 <= 0x17.into() {
+            Ok(pallas::codec::utils::AnyUInt::MajorByte(
+                self.0.to_u8().expect("to_u8 should not fail"),
             ))
         } else {
             Ok(pallas::codec::utils::AnyUInt::U8(
@@ -204,7 +228,22 @@ mod tests {
 
         let encoded = minicbor::to_vec(bigint.clone()).unwrap();
 
-        assert_eq!(hex::encode(encoded.clone()), "1805");
+        assert_eq!(hex::encode(encoded.clone()), "05");
+
+        let decoded: BigInt = minicbor::decode(&encoded).unwrap();
+
+        assert_eq!(decoded, bigint);
+    }
+
+    #[test]
+    fn test_zero() {
+        let bigint: BigInt = num_bigint::BigInt::from_str("0")
+            .expect("should be able to parse bigint")
+            .into();
+
+        let encoded = minicbor::to_vec(bigint.clone()).unwrap();
+
+        assert_eq!(hex::encode(encoded.clone()), "00");
 
         let decoded: BigInt = minicbor::decode(&encoded).unwrap();
 

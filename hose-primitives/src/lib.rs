@@ -1,4 +1,4 @@
-mod datatypes;
+pub mod datatypes;
 mod network;
 mod params;
 

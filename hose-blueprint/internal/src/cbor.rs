@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use heck::{ToPascalCase, ToSnakeCase, ToUpperCamelCase};
+use heck::{ToSnakeCase, ToUpperCamelCase};
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, ToTokens};
+use quote::{format_ident, quote};
 use syn::Ident;
 
 use crate::ir::{compute_cbor_tag, Constructor};

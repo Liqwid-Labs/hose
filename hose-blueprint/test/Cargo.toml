@@ -18,4 +18,8 @@ serde_json = { workspace = true }
 
 minicbor = "0.25.1"
 
+num-bigint = { workspace = true }
+num = { workspace = true }
+
 hose-blueprint = { path = "../" }
+hose-primitives = { path = "../../hose-primitives" }

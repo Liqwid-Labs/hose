@@ -1,21 +1,19 @@
 [workspace]
 resolver = "2"
-members = [
-  "hose-blueprint",
-  "hose-primitives",
-  "hose-submission",
-  "hose-txbuilder"
-]
+members = [ "hose-blueprint", "hose-primitives", "hose-submission", "hose-txbuilder", "hose-blueprint/test" ]
 
 [workspace.dependencies]
-betterfrost_client = { git = "https://github.com/liqwid-labs/betterfrost" }
-pallas = { git = "https://github.com/txpipe/pallas", features = ["applying", "unstable"] }
 thiserror = "2.0.11"
 anyhow = "1.0.95"
-
 serde = "1.0.217"
 serde_json = "1.0.137"
 hex = "0.4.3"
 minicbor = "0.25.1"
+num-bigint = "0.4.6"
+num = "0.4.3"
+betterfrost_client = { git = "https://github.com/liqwid-labs/betterfrost" }
+pallas = { git = "https://github.com/txpipe/pallas", features = ["applying", "unstable"] }
 
-tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "signal"] }
+[workspace.dependencies.tokio]
+version = "1.43.0"
+features = [ "macros", "rt-multi-thread", "signal",]
