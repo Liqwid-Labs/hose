@@ -1,5 +1,5 @@
-mod node;
-mod ogmios;
+pub mod node;
+pub mod ogmios;
 
 pub use node::NodeClient;
 pub use ogmios::OgmiosClient;

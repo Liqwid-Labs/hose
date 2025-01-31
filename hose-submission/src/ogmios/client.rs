@@ -7,6 +7,7 @@ use super::types::*;
 use super::types::Response;
 use thiserror::Error;
 
+#[derive(Debug)]
 pub struct OgmiosClient {
     ws: tokio_tungstenite::WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>,
 }
