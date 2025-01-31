@@ -5,6 +5,8 @@ use num::ToPrimitive;
 use num_bigint::Sign;
 
 /// A wrapper around `num_bigint::BigInt` that implements `minicbor::Encode` and `minicbor::Decode`.
+/// You should not pass this around and rather use the `num_bigint::BigInt` type. This is only
+/// here to make it possible to encode and decode BigInts in CBOR.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BigInt(num_bigint::BigInt);
 

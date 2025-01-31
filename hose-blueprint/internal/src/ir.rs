@@ -110,7 +110,7 @@ impl ToTokens for Primitive {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         tokens.extend(match self {
             Primitive::OpaqueData => quote! { pallas::codec::utils::AnyCbor },
-            Primitive::Int => quote! { hose_primitives::datatypes::BigInt },
+            Primitive::Int => quote! { hose_primitives::bigint::BigInt },
             Primitive::Bytes => quote! { pallas::codec::utils::Bytes },
             Primitive::List(inner) => quote! { Vec<#inner> },
             Primitive::Tuple(inner) => quote! { (#(#inner),*) },

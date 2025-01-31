@@ -2,7 +2,7 @@
 mod tests {
     use std::str::FromStr;
     use example::root::{ActionDatum, ActionValue};
-    use hose_primitives::datatypes::BigInt;
+    use hose_primitives::bigint::BigInt;
     use pallas::codec::utils::{AnyUInt, Bytes};
 
     pub mod example {

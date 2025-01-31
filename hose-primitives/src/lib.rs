@@ -1,4 +1,5 @@
-pub mod datatypes;
+pub mod bigint;
+pub mod data;
 mod network;
 mod params;
 
