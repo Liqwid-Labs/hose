@@ -1,7 +1,11 @@
+#[cfg(feature = "node")]
 pub mod node;
+#[cfg(feature = "ogmios")]
 pub mod ogmios;
 
+#[cfg(feature = "node")]
 pub use node::NodeClient;
+#[cfg(feature = "ogmios")]
 pub use ogmios::OgmiosClient;
 
 pub trait SubmitTx {
