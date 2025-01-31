@@ -345,6 +345,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "blueprint-test"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "heck",
+ "hex",
+ "hose-blueprint",
+ "hose-primitives",
+ "minicbor",
+ "num",
+ "num-bigint",
+ "pallas",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn 2.0.96",
+ "thiserror 2.0.11",
+]
+
+[[package]]
 name = "bs58"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1094,6 +1115,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "heck",
+ "hose-blueprint-internal",
  "pallas",
  "proc-macro2",
  "quote",
@@ -1103,10 +1125,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "hose-blueprint-internal"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "heck",
+ "minicbor",
+ "pallas",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn 2.0.96",
+ "thiserror 2.0.11",
+]
+
+[[package]]
 name = "hose-primitives"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "hex",
+ "minicbor",
+ "num",
+ "num-bigint",
  "pallas",
  "serde",
  "serde_json",
@@ -1607,6 +1649,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "num"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35bd024e8b2ff75562e5f34e7f4905839deb4b22955ef5e73d2fea1b9813cb23"
+dependencies = [
+ "num-bigint",
+ "num-complex",
+ "num-integer",
+ "num-iter",
+ "num-rational",
+ "num-traits",
+]
+
+[[package]]
 name = "num-bigint"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1631,6 +1687,15 @@ dependencies = [
  "rand",
  "smallvec",
  "zeroize",
+]
+
+[[package]]
+name = "num-complex"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
+dependencies = [
+ "num-traits",
 ]
 
 [[package]]
