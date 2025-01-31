@@ -167,7 +167,10 @@ impl TransactionBuilder {
         // Add inputs until we have enough lovelace and assets to cover outputs and fee
         let mut balanced = false;
         for utxo in selection_utxos {
-            if lovelace_diff >= 0 && asset_diff.iter().all(|(_, diff)| *diff >= 0) && self.min_lovelace_for_output(self.change_output(fee), params)? as i64 <= lovelace_diff {
+            if lovelace_diff >= 0
+                && asset_diff.iter().all(|(_, diff)| *diff >= 0)
+                // UTxOs have a minimum size, so make sure we have enough to cover it
+                && self.min_lovelace_for_output(self.change_output(fee), params)? as i64 <= lovelace_diff {
                 // TODO: ugly, refactor
                 balanced = true;
                 break;
@@ -238,6 +241,7 @@ impl TransactionBuilder {
         let mut change_output = self.change_output.unwrap_or(Output::default_from_address(&self.change_address)).clone();
         change_output.lovelace = self.lovelace_diff(fee, false) as u64;
         change_output.assets = self.asset_diff(false).iter().map(|(key, diff)| Asset { key: key.clone(), amount: *diff as u64 }).collect();
+        change_output
     }
 
     pub async fn build<T>(mut self, coin_selection_utxos: Vec<Output>, client: &mut T) -> Result<BuiltTransaction, TxBuilderError>

@@ -53,6 +53,18 @@ pub struct Output {
     // scripts
 }
 
+impl Output {
+    pub fn default_from_address(address: &Address) -> Self {
+        Self {
+            address: address.clone(),
+            tx_hash: TxHash::from(Hash::from([0; 32])),
+            txo_index: 0,
+            lovelace: 0,
+            assets: HashMap::new(),
+        }
+    }
+}
+
 impl PartialEq for Output {
     fn eq(&self, other: &Self) -> bool {
         self.tx_hash == other.tx_hash && self.txo_index == other.txo_index
