@@ -1,44 +1,100 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use futures_util::{SinkExt, StreamExt};
+use thiserror::Error;
+use tokio::net::TcpStream;
+use tokio::sync::{oneshot, Mutex};
 use tokio_tungstenite::tungstenite::protocol::Message;
-use tokio_tungstenite::MaybeTlsStream;
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
+use uuid::Uuid;
 
 use super::types::*;
 
-use super::types::Response;
-use thiserror::Error;
-
 #[derive(Debug)]
 pub struct OgmiosClient {
-    ws: tokio_tungstenite::WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>,
+    ws: Arc<Mutex<WebSocketStream<MaybeTlsStream<TcpStream>>>>,
+    pending_requests:
+        Arc<Mutex<HashMap<String, oneshot::Sender<Result<serde_json::Value, ClientError>>>>>,
 }
 
 impl OgmiosClient {
     pub async fn new(ogmios_url: &str) -> Result<Self, ClientError> {
         let (ws, _) = tokio_tungstenite::connect_async(ogmios_url).await?;
-        Ok(Self { ws })
+        let ws = Arc::new(Mutex::new(ws));
+        let pending_requests = Arc::new(Mutex::new(HashMap::new()));
+        let client = Self {
+            ws,
+            pending_requests,
+        };
+
+        // Spawn a task to handle incoming messages
+        let ws = client.ws.clone();
+        let pending_requests = client.pending_requests.clone();
+        tokio::spawn(async move { OgmiosClient::handle_responses(ws, pending_requests).await });
+
+        Ok(client)
     }
 
-    pub async fn request(&mut self, request: Request) -> Result<serde_json::Value, ClientError> {
-        let request = tokio_tungstenite::tungstenite::Message::Text(
-            serde_json::to_string(&request).unwrap().into()
-        );
-        self.ws.send(request).await?;
+    async fn handle_responses(
+        ws: Arc<Mutex<WebSocketStream<MaybeTlsStream<TcpStream>>>>,
+        pending_requests: Arc<
+            Mutex<HashMap<String, oneshot::Sender<Result<serde_json::Value, ClientError>>>>,
+        >,
+    ) {
+        loop {
+            let msg_result = {
+                let mut ws = ws.lock().await;
+                ws.next().await
+            };
 
-        let response = self.ws.next().await.ok_or(ClientError::NoResponse)??;
-        match response {
-            Message::Text(text) => {
-                let response: Response =
-                    serde_json::from_str(&text).inspect_err(|e| println!("{e:?}: {text}"))?;
-
-                match response {
-                    Response::Error { error, .. } => {
-                        Err(ClientError::ErrorResponse(error))
+            match msg_result {
+                Some(Ok(Message::Text(text))) => {
+                    if let Ok(response) = serde_json::from_str::<Response>(&text) {
+                        if let Some(id) = response.id() {
+                            let mut requests = pending_requests.lock().await;
+                            if let Some(sender) = requests.remove(&id) {
+                                let result = match response {
+                                    Response::Error { error, .. } => {
+                                        Err(ClientError::ErrorResponse(error))
+                                    }
+                                    Response::Result { result, .. } => Ok(result),
+                                };
+                                let _ = sender.send(result);
+                            }
+                        }
                     }
-                   Response::Result { result, .. } => Ok(result),
                 }
+                // Websocket closed
+                None | Some(Ok(Message::Close(_))) => {
+                    // Close all pending requests
+                    for (_, sender) in pending_requests.lock().await.drain() {
+                        let _ = sender.send(Err(ClientError::NoResponse));
+                    }
+                    break;
+                },
+                _ => continue,
             }
-            _ => Err(ClientError::UnexpectedResponse),
         }
+    }
+
+    pub async fn request(
+        &mut self,
+        mut request: Request,
+    ) -> Result<serde_json::Value, ClientError> {
+        let id = request.id.clone().unwrap_or(Uuid::new_v4().to_string());
+        request.id = Some(id.clone());
+
+        // Create a channel for receiving the response
+        let (sender, receiver) = oneshot::channel();
+        self.pending_requests.lock().await.insert(id, sender);
+
+        // Send the request
+        let request_msg = Message::Text(serde_json::to_string(&request)?.into());
+        self.ws.lock().await.send(request_msg).await?;
+
+        // Wait for the response
+        receiver.await.map_err(|_| ClientError::NoResponse)?
     }
 }
 
@@ -58,4 +114,23 @@ pub enum ClientError {
 
     #[error("Error response from Ogmios: {0:?}")]
     ErrorResponse(ErrorResponse),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_request() {
+        let mut client = OgmiosClient::new("ws://mainnet-ogmios:1337").await.unwrap();
+
+        let response = client.request(Request {
+            jsonrpc: "2.0".to_string(),
+            method: "queryLedgerState/tip".to_string(),
+            id: Some("testing".to_string()),
+            params: None,
+        }).await.unwrap();
+
+        assert!(response.get("slot").is_some())
+    }
 }

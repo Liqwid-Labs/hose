@@ -1,5 +1,5 @@
-use super::client::{ OgmiosClient, ClientError };
-use super::types::{ Request, RequestMethod };
+use super::client::{ClientError, OgmiosClient};
+use super::types::{Request, RequestMethod};
 use crate::SubmitTx;
 use serde_json::json;
 
@@ -7,7 +7,9 @@ impl SubmitTx for OgmiosClient {
     type Error = ClientError;
 
     async fn submit_tx(&mut self, cbor: &[u8]) -> std::result::Result<(), Self::Error> {
-        self.request(SubmitRequest::new(cbor).into()).await.map(|_| ())
+        self.request(SubmitRequest::new(cbor).into())
+            .await
+            .map(|_| ())
     }
 }
 
@@ -26,7 +28,8 @@ impl Into<Request> for SubmitRequest<'_> {
         Request {
             jsonrpc: "2.0".into(),
             method: RequestMethod::SubmitTransaction.into(),
-            params: json!({ "transaction": { "cbor": hex::encode(self.transaction) } }),
+            id: None,
+            params: Some(json!({ "transaction": { "cbor": hex::encode(self.transaction) } })),
         }
     }
 }

@@ -18,7 +18,8 @@ impl From<RequestMethod> for String {
 pub struct Request {
     pub jsonrpc: String,
     pub method: String,
-    pub params: serde_json::Value,
+    pub id: Option<String>,
+    pub params: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -31,8 +32,25 @@ pub struct ErrorResponse {
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
 pub enum Response {
-    Error { error: ErrorResponse },
-    Result { result: serde_json::Value },
+    Error {
+        id: String,
+        error: ErrorResponse,
+    },
+    Result {
+        jsonrpc: String,
+        method: String,
+        id: String,
+        result: serde_json::Value,
+    },
+}
+
+impl Response {
+    pub fn id(&self) -> Option<String> {
+        match self {
+            Response::Error { id, .. } => Some(id.clone()),
+            Response::Result { id, .. } => Some(id.clone()),
+        }
+    }
 }
 
 /// Errors that can occur during transaction validation and submission
@@ -40,6 +58,21 @@ pub enum Response {
 pub enum ErrorResponseCode {
     /// Failed to deserialize in any of the known eras
     DeserializationError = -32602,
+
+    /// Unable to acquire the ledger state at the request point.
+    QueryAcquireFailed = 2000,
+
+    /// An era mismatch between a client request and the era the ledger is in. This may occur when running queries on a syncing node and/or when the node is crossing an era.
+    QueryEraMismatch = 2001,
+
+    /// Some query is not available for the requested ledger era.
+    QueryUnavailableInCurrentEra = 2002,
+
+    /// Previously acquired ledger state is no longer available.
+    QueryAcquireExpired = 2003,
+
+    /// Something went wrong (e.g. misconfiguration) in reading genesis file for the latest era.
+    QueryInvalidGenesis = 2004,
 
     /// Returned when trying to evaluate execution units of a pre-Alonzo transaction.
     /// Note that this isn't possible with Ogmios because transactions are always de-serialized as Alonzo transactions.

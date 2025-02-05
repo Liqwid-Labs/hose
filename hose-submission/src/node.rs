@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use pallas::applying::{CertState, Environment, UTxOs, ValidationResult};
 use pallas::ledger::traverse::{Era, MultiEraTx};
 use pallas::network::facades;
-use pallas::network::miniprotocols::localstate::queries_v16::{ get_chain_point, get_current_era };
+use pallas::network::miniprotocols::localstate::queries_v16::{get_chain_point, get_current_era};
+use pallas::network::miniprotocols::localtxsubmission::EraTx;
 use pallas::network::miniprotocols::localtxsubmission::Response;
 use pallas::network::miniprotocols::Point;
-use pallas::network::miniprotocols::localtxsubmission::EraTx;
 
 use super::SubmitTx;
 use hose_primitives::NetworkId;
@@ -19,7 +19,11 @@ pub struct NodeClient<'a> {
 }
 
 impl<'a> NodeClient<'a> {
-    pub fn new(network: NetworkId, socket_path: PathBuf, betterfrost_client: &'a betterfrost_client::Client) -> Self {
+    pub fn new(
+        network: NetworkId,
+        socket_path: PathBuf,
+        betterfrost_client: &'a betterfrost_client::Client,
+    ) -> Self {
         Self {
             network,
             socket_path,
@@ -31,11 +35,9 @@ impl<'a> NodeClient<'a> {
 impl SubmitTx for NodeClient<'_> {
     type Error = anyhow::Error;
 
-    async fn submit_tx(
-        &mut self,
-        cbor: &[u8],
-    ) -> std::result::Result<(), Self::Error> {
-        let mut client = facades::NodeClient::connect(&self.socket_path, self.network.magic().into()).await?;
+    async fn submit_tx(&mut self, cbor: &[u8]) -> std::result::Result<(), Self::Error> {
+        let mut client =
+            facades::NodeClient::connect(&self.socket_path, self.network.magic().into()).await?;
 
         let statequery = client.statequery();
         statequery.acquire(None).await?;

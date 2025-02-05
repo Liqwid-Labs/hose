@@ -1,13 +1,16 @@
 #![allow(clippy::from_over_into)]
 
 use super::client::*;
-use super::types::{ Request, RequestMethod };
+use super::types::{Request, RequestMethod};
 use crate::EvaluateTx;
 use serde_json::json;
 
 impl EvaluateTx for OgmiosClient {
     type Error = ClientError;
-    async fn evaluate_tx(&mut self, cbor: &[u8]) -> std::result::Result<Vec<crate::ScriptEvaluation>, Self::Error> {
+    async fn evaluate_tx(
+        &mut self,
+        cbor: &[u8],
+    ) -> std::result::Result<Vec<crate::ScriptEvaluation>, Self::Error> {
         let response = self.request(EvaluateRequest::new(cbor).into()).await?;
         let script_evaluation: Vec<ScriptEvaluation> = serde_json::from_value(response)?;
         Ok(script_evaluation.into_iter().map(|s| s.into()).collect())
@@ -29,7 +32,8 @@ impl Into<Request> for EvaluateRequest<'_> {
         Request {
             jsonrpc: "2.0".into(),
             method: RequestMethod::EvaluateTransaction.into(),
-            params: json!({ "transaction": { "cbor": hex::encode(self.transaction) } }),
+            id: None,
+            params: Some(json!({ "transaction": { "cbor": hex::encode(self.transaction) } })),
         }
     }
 }
@@ -37,13 +41,13 @@ impl Into<Request> for EvaluateRequest<'_> {
 #[derive(serde::Deserialize)]
 pub struct ScriptEvaluation {
     validator: String,
-    budget: ScriptBudget
+    budget: ScriptBudget,
 }
 
 #[derive(serde::Deserialize)]
 struct ScriptBudget {
     memory: u64,
-    cpu: u64
+    cpu: u64,
 }
 
 impl Into<crate::ScriptEvaluation> for ScriptEvaluation {
@@ -55,11 +59,17 @@ impl Into<crate::ScriptEvaluation> for ScriptEvaluation {
                 "certificate" => crate::ScriptType::Certificate,
                 "mint" => crate::ScriptType::Mint,
                 "withdrawal" => crate::ScriptType::Withdrawal,
-                _ => panic!("Unknown validator type: {}", self.validator)
+                _ => panic!("Unknown validator type: {}", self.validator),
             },
-            script_index: self.validator.split(':').next_back().unwrap().parse().unwrap(),
+            script_index: self
+                .validator
+                .split(':')
+                .next_back()
+                .unwrap()
+                .parse()
+                .unwrap(),
             memory_budget: self.budget.memory,
-            cpu_budget: self.budget.cpu
+            cpu_budget: self.budget.cpu,
         }
     }
 }

@@ -20,6 +20,7 @@ betterfrost_client = { workspace = true, optional = true }
 futures-util = "0.3.31"
 tokio = { version = "1.14.0", features = ["macros", "rt-multi-thread", "signal"] }
 tokio-tungstenite = { version = "0.26.1", optional = true }
+uuid = { version = "1.13.1", features = ["v4"] }
 
 [features]
 default = ["ogmios"]
