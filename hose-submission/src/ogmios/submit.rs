@@ -23,13 +23,13 @@ impl<'a> SubmitRequest<'a> {
     }
 }
 
-impl Into<Request> for SubmitRequest<'_> {
-    fn into(self) -> Request {
+impl From<SubmitRequest<'_>> for Request {
+    fn from(val: SubmitRequest<'_>) -> Self {
         Request {
             jsonrpc: "2.0".into(),
             method: RequestMethod::SubmitTransaction.into(),
             id: None,
-            params: Some(json!({ "transaction": { "cbor": hex::encode(self.transaction) } })),
+            params: Some(json!({ "transaction": { "cbor": hex::encode(val.transaction) } })),
         }
     }
 }

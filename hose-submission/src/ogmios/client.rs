@@ -51,6 +51,7 @@ impl OgmiosClient {
 
             match msg_result {
                 Some(Ok(Message::Text(text))) => {
+                    // TODO: log responses that fail to parse
                     if let Ok(response) = serde_json::from_str::<Response>(&text) {
                         if let Some(id) = response.id() {
                             let mut requests = pending_requests.lock().await;

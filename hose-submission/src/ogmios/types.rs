@@ -1,3 +1,4 @@
+use num_enum::FromPrimitive;
 use serde::{Deserialize, Serialize};
 
 pub enum RequestMethod {
@@ -33,6 +34,8 @@ pub struct ErrorResponse {
 #[serde(untagged)]
 pub enum Response {
     Error {
+        jsonrpc: String,
+        method: String,
         id: String,
         error: ErrorResponse,
     },
@@ -54,7 +57,9 @@ impl Response {
 }
 
 /// Errors that can occur during transaction validation and submission
-#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq, FromPrimitive)]
+#[repr(i32)]
+#[serde(from = "i32")]
 pub enum ErrorResponseCode {
     /// Failed to deserialize in any of the known eras
     DeserializationError = -32602,
@@ -322,4 +327,8 @@ pub enum ErrorResponseCode {
 
     /// Unrecognized certificate type. This error is a placeholder due to how internal data-types are modeled.
     UnrecognizedCertificateType = 3998,
+
+    /// Not in the list of known errors, contributions welcome!
+    #[num_enum(catch_all)]
+    UnknownError(i32) = -1,
 }
