@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
+use serde::Deserialize;
 use thiserror::Error;
 use tokio::net::TcpStream;
 use tokio::sync::{oneshot, Mutex};
@@ -72,16 +73,15 @@ impl OgmiosClient {
                         let _ = sender.send(Err(ClientError::NoResponse));
                     }
                     break;
-                },
-                _ => continue,
+                }
+                _ => {
+                    continue;
+                }
             }
         }
     }
 
-    pub async fn request(
-        &mut self,
-        mut request: Request,
-    ) -> Result<serde_json::Value, ClientError> {
+    pub async fn request(&self, mut request: Request) -> Result<serde_json::Value, ClientError> {
         let id = request.id.clone().unwrap_or(Uuid::new_v4().to_string());
         request.id = Some(id.clone());
 
@@ -96,6 +96,51 @@ impl OgmiosClient {
         // Wait for the response
         receiver.await.map_err(|_| ClientError::NoResponse)?
     }
+
+    pub async fn next_block(&self) -> Result<NextBlockResponse, ClientError> {
+        let req = self
+            .request(Request {
+                jsonrpc: "2.0".to_string(),
+                method: "nextBlock".to_string(),
+                params: None,
+                id: None,
+            })
+            .await?;
+
+        Ok(serde_json::from_value(req)?)
+    }
+
+    pub async fn query_ledger_tip(&self) -> std::result::Result<Tip, ClientError> {
+        let response = self
+            .request(Request {
+                jsonrpc: "2.0".to_string(),
+                method: "queryLedgerState/tip".to_string(),
+                id: None,
+                params: None,
+            })
+            .await?;
+        Ok(serde_json::from_value::<Tip>(response)?)
+    }
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+pub struct Tip {
+    pub slot: u64,
+    pub id: String,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+pub struct Block {
+    pub id: String,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(tag = "direction")]
+pub enum NextBlockResponse {
+    #[serde(rename = "forward")]
+    RollForward { block: Block, tip: Tip },
+    #[serde(rename = "backward")]
+    RollBackward { tip: Tip },
 }
 
 #[derive(Error, Debug)]
@@ -124,13 +169,8 @@ mod tests {
     async fn test_request() {
         let mut client = OgmiosClient::new("ws://mainnet-ogmios:1337").await.unwrap();
 
-        let response = client.request(Request {
-            jsonrpc: "2.0".to_string(),
-            method: "queryLedgerState/tip".to_string(),
-            id: Some("testing".to_string()),
-            params: None,
-        }).await.unwrap();
+        let response = client.query_ledger_tip().await;
 
-        assert!(response.get("slot").is_some())
+        assert!(response.is_ok());
     }
 }
