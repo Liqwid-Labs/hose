@@ -1,76 +1,70 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use futures_util::future::Pending;
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use thiserror::Error;
 use tokio::net::TcpStream;
 use tokio::sync::{oneshot, Mutex};
 use tokio_tungstenite::tungstenite::protocol::Message;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::tungstenite::Utf8Bytes;
+use tokio_tungstenite::{tungstenite, MaybeTlsStream, WebSocketStream};
 use uuid::Uuid;
 
 use super::types::*;
 
-#[derive(Debug)]
-pub struct OgmiosClient {
+type PendingRequests =
+Arc<Mutex<HashMap<String, oneshot::Sender<Result<serde_json::Value, ClientError>>>>>;
+
+#[derive(Debug, Clone)]
+struct ClientConnection {
     ws: Arc<Mutex<WebSocketStream<MaybeTlsStream<TcpStream>>>>,
-    pending_requests:
-        Arc<Mutex<HashMap<String, oneshot::Sender<Result<serde_json::Value, ClientError>>>>>,
+    pending_requests: PendingRequests,
 }
 
-impl OgmiosClient {
-    pub async fn new(ogmios_url: &str) -> Result<Self, ClientError> {
-        let (ws, _) = tokio_tungstenite::connect_async(ogmios_url).await?;
-        let ws = Arc::new(Mutex::new(ws));
+impl ClientConnection {
+    pub fn new(ws: WebSocketStream<MaybeTlsStream<TcpStream>>) -> Self {
         let pending_requests = Arc::new(Mutex::new(HashMap::new()));
-        let client = Self {
-            ws,
+        Self {
+            ws: Arc::new(Mutex::new(ws)),
             pending_requests,
-        };
-
-        // Spawn a task to handle incoming messages
-        let ws = client.ws.clone();
-        let pending_requests = client.pending_requests.clone();
-        tokio::spawn(async move { OgmiosClient::handle_responses(ws, pending_requests).await });
-
-        Ok(client)
+        }
     }
 
-    async fn handle_responses(
-        ws: Arc<Mutex<WebSocketStream<MaybeTlsStream<TcpStream>>>>,
-        pending_requests: Arc<
-            Mutex<HashMap<String, oneshot::Sender<Result<serde_json::Value, ClientError>>>>,
-        >,
-    ) {
+    async fn handle_response(&self, text: Utf8Bytes) {
+        if let Ok(response) = serde_json::from_str::<Response>(&text) {
+            if let Some(id) = response.id() {
+                let mut requests = self.pending_requests.lock().await;
+                if let Some(sender) = requests.remove(&id) {
+                    let result = match response {
+                        Response::Error { error, .. } => {
+                            Err(ClientError::ErrorResponse(error))
+                        }
+                        Response::Result { result, .. } => Ok(result),
+                    };
+                    let _ = sender.send(result);
+                }
+            }
+        }
+    }
+
+    async fn handle_responses(&self) {
         loop {
             let msg_result = {
-                let mut ws = ws.lock().await;
+                let mut ws = self.ws.lock().await;
                 ws.next().await
             };
 
             match msg_result {
                 Some(Ok(Message::Text(text))) => {
-                    // TODO: log responses that fail to parse
-                    if let Ok(response) = serde_json::from_str::<Response>(&text) {
-                        if let Some(id) = response.id() {
-                            let mut requests = pending_requests.lock().await;
-                            if let Some(sender) = requests.remove(&id) {
-                                let result = match response {
-                                    Response::Error { error, .. } => {
-                                        Err(ClientError::ErrorResponse(error))
-                                    }
-                                    Response::Result { result, .. } => Ok(result),
-                                };
-                                let _ = sender.send(result);
-                            }
-                        }
-                    }
+                    self.handle_response(text).await;
                 }
                 // Websocket closed
                 None | Some(Ok(Message::Close(_))) => {
                     // Close all pending requests
-                    for (_, sender) in pending_requests.lock().await.drain() {
+                    for (_, sender) in self.pending_requests.lock().await.drain() {
                         let _ = sender.send(Err(ClientError::NoResponse));
                     }
                     break;
@@ -97,6 +91,30 @@ impl OgmiosClient {
         // Wait for the response
         receiver.await.map_err(|_| ClientError::NoResponse)?
     }
+}
+
+#[derive(Debug)]
+pub struct OgmiosClient {
+    client_connection: Arc<ClientConnection>,
+}
+
+impl OgmiosClient {
+    pub async fn new(ogmios_url: &str) -> Result<Self, ClientError> {
+        let (ws, _) = tokio_tungstenite::connect_async(ogmios_url).await?;
+        let client_connection = ClientConnection::new(ws);
+
+        let client = Self {
+            client_connection: Arc::new(client_connection.clone()),
+        };
+
+        tokio::spawn(async move { client_connection.handle_responses().await });
+
+        Ok(client)
+    }
+
+    pub async fn request(&self, request: Request) -> Result<serde_json::Value, ClientError> {
+        self.client_connection.request(request).await
+    }
 
     pub async fn next_block(&self) -> Result<NextBlockResponse, ClientError> {
         let req = self
@@ -106,7 +124,7 @@ impl OgmiosClient {
                 params: None,
                 id: None,
             })
-            .await?;
+        .await?;
 
         Ok(serde_json::from_value(req)?)
     }
@@ -119,7 +137,7 @@ impl OgmiosClient {
                 id: None,
                 params: None,
             })
-            .await?;
+        .await?;
         Ok(serde_json::from_value::<Tip>(response)?)
     }
 }
