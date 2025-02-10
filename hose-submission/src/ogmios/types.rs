@@ -36,13 +36,13 @@ pub enum Response {
     Error {
         jsonrpc: String,
         method: String,
-        id: String,
+        id: Option<String>,
         error: ErrorResponse,
     },
     Result {
         jsonrpc: String,
         method: String,
-        id: String,
+        id: Option<String>,
         result: serde_json::Value,
     },
 }
@@ -50,8 +50,8 @@ pub enum Response {
 impl Response {
     pub fn id(&self) -> Option<String> {
         match self {
-            Response::Error { id, .. } => Some(id.clone()),
-            Response::Result { id, .. } => Some(id.clone()),
+            Response::Error { id, .. } => id.clone(),
+            Response::Result { id, .. } => id.clone(),
         }
     }
 }
