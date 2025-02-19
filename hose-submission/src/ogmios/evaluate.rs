@@ -22,27 +22,30 @@ impl EvaluateTx for OgmiosClient {
 
 #[derive(Deserialize, Serialize)]
 pub struct AdditionalUtxo {
-    transaction: AdditionalUtxoTransaction,
-    index: u32,
-    address: String,
+    pub transaction: AdditionalUtxoTransaction,
+    pub index: u32,
+    pub address: String,
     // TODO: requires 'ada' key with { lovelace: u64 }
-    value: HashMap<String, u64>,
+    pub value: HashMap<String, u64>,
     #[serde(rename = "datumHash")]
-    datum_hash: Option<String>,
-    datum: Option<String>,
-    script: Option<AdditionalUtxoScript>
+    pub datum_hash: Option<String>,
+    pub datum: Option<String>,
+    pub script: Option<AdditionalUtxoScript>,
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct AdditionalUtxoTransaction {
-    id: String
+    pub id: String,
 }
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "language")]
 pub enum AdditionalUtxoScript {
     #[serde(rename = "native")]
-    Native { json: serde_json::Value, cbor: Option<String> },
+    Native {
+        json: serde_json::Value,
+        cbor: Option<String>,
+    },
     #[serde(rename = "plutus:v1")]
     PlutusV1 { cbor: String },
     #[serde(rename = "plutus:v2")]
@@ -53,17 +56,20 @@ pub enum AdditionalUtxoScript {
 
 #[derive(Deserialize, Serialize)]
 pub struct AdditionalUtxoPlutusScript {
-    cbor: String,
+    pub cbor: String,
 }
 
 pub struct EvaluateRequest<'a> {
-    transaction: &'a [u8],
-    additional_utxo: Option<Vec<AdditionalUtxo>>,
+    pub transaction: &'a [u8],
+    pub additional_utxo: Option<Vec<AdditionalUtxo>>,
 }
 
 impl<'a> EvaluateRequest<'a> {
     pub fn new(transaction: &'a [u8], additional_utxo: Option<Vec<AdditionalUtxo>>) -> Self {
-        Self { transaction, additional_utxo }
+        Self {
+            transaction,
+            additional_utxo,
+        }
     }
 }
 
