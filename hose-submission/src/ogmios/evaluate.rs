@@ -26,7 +26,7 @@ pub struct AdditionalUtxo {
     pub index: u32,
     pub address: String,
     // TODO: requires 'ada' key with { lovelace: u64 }
-    pub value: HashMap<String, u64>,
+    pub value: HashMap<String, HashMap<String, i64>>,
     #[serde(rename = "datumHash")]
     pub datum_hash: Option<String>,
     pub datum: Option<String>,
