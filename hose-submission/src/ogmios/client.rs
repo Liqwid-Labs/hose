@@ -16,7 +16,7 @@ use uuid::Uuid;
 use super::types::*;
 
 type PendingRequests =
-Arc<Mutex<HashMap<String, oneshot::Sender<Result<serde_json::Value, ClientError>>>>>;
+    Arc<Mutex<HashMap<String, oneshot::Sender<Result<serde_json::Value, ClientError>>>>>;
 
 #[derive(Debug, Clone)]
 struct ClientConnection {
@@ -39,9 +39,7 @@ impl ClientConnection {
                 let mut requests = self.pending_requests.lock().await;
                 if let Some(sender) = requests.remove(&id) {
                     let result = match response {
-                        Response::Error { error, .. } => {
-                            Err(ClientError::ErrorResponse(error))
-                        }
+                        Response::Error { error, .. } => Err(ClientError::ErrorResponse(error)),
                         Response::Result { result, .. } => Ok(result),
                     };
                     let _ = sender.send(result);
@@ -124,7 +122,7 @@ impl OgmiosClient {
                 params: None,
                 id: None,
             })
-        .await?;
+            .await?;
 
         Ok(serde_json::from_value(req)?)
     }
@@ -137,7 +135,7 @@ impl OgmiosClient {
                 id: None,
                 params: None,
             })
-        .await?;
+            .await?;
         Ok(serde_json::from_value::<Tip>(response)?)
     }
 }

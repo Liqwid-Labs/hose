@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use super::client::*;
 use super::types::{Request, RequestMethod};
 use crate::EvaluateTx;
-use serde_json::json;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 impl EvaluateTx for OgmiosClient {
     type Error = ClientError;
@@ -14,7 +14,9 @@ impl EvaluateTx for OgmiosClient {
         &mut self,
         cbor: &[u8],
     ) -> std::result::Result<Vec<crate::ScriptEvaluation>, Self::Error> {
-        let response = self.request(EvaluateRequest::new(cbor, None).into()).await?;
+        let response = self
+            .request(EvaluateRequest::new(cbor, None).into())
+            .await?;
         let script_evaluation: Vec<ScriptEvaluation> = serde_json::from_value(response)?;
         Ok(script_evaluation.into_iter().map(|s| s.into()).collect())
     }
@@ -138,7 +140,12 @@ mod tests {
         let request: Request = EvaluateRequest::new(&tx_cbor, None).into();
         let json = serde_json::to_string(&request).unwrap();
 
-        let response = reqwest::Client::new().post("http://mainnet-ogmios:1337").body(json).send().await.unwrap();
+        let response = reqwest::Client::new()
+            .post("http://mainnet-ogmios:1337")
+            .body(json)
+            .send()
+            .await
+            .unwrap();
 
         // let response = client.request(request.into()).await;
         println!("{:?}", response);

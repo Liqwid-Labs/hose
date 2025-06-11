@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
     use example::root::{ActionDatum, ActionValue};
     use hose_primitives::bigint::BigInt;
     use pallas::codec::utils::{AnyUInt, Bytes};
+    use std::str::FromStr;
 
     pub mod example {
         use hose_blueprint::blueprint;
@@ -12,8 +12,8 @@ mod tests {
 
     #[test]
     fn test_stake_datum() {
-        use example::root::DelegatedTo;
         use example::root::cardano::address::Credential;
+        use example::root::DelegatedTo;
 
         let real_datum = 
             String::from("9f1a5f0929eed8799f581c99669d1885f1b6f10d3447647403be44beacedab9039a4ad9394e492ffd8799fd8799f581cf40f4d6270c46f4bc324ddbe8399a0fe463b598e6abdf6076b8fe03affff80ff");
@@ -21,7 +21,8 @@ mod tests {
         let bytes = hex::decode(&real_datum).unwrap();
         let decoded_datum: example::root::Datum = minicbor::decode(&bytes).unwrap();
 
-        let example::root::Datum(staked_amount, owner, delegated_to, proposal_locks) = decoded_datum.clone();
+        let example::root::Datum(staked_amount, owner, delegated_to, proposal_locks) =
+            decoded_datum.clone();
 
         assert_eq!(staked_amount, BigInt::from(1_594_436_078u32));
 
@@ -34,12 +35,10 @@ mod tests {
         );
         assert_eq!(
             delegated_to,
-            DelegatedTo::Some(
-                Credential::VerificationKey(
-                    Bytes::from_str("f40f4d6270c46f4bc324ddbe8399a0fe463b598e6abdf6076b8fe03a")
+            DelegatedTo::Some(Credential::VerificationKey(
+                Bytes::from_str("f40f4d6270c46f4bc324ddbe8399a0fe463b598e6abdf6076b8fe03a")
                     .unwrap()
-                )
-            )
+            ))
         );
         assert_eq!(proposal_locks, vec![]);
 
@@ -57,9 +56,15 @@ mod tests {
         let bytes = hex::decode(&real_datum).unwrap();
         let decoded_datum: ActionDatum = minicbor::decode(&bytes).unwrap();
 
-        let ActionDatum( action_value, reserved_supply ) = decoded_datum.clone();
+        let ActionDatum(action_value, reserved_supply) = decoded_datum.clone();
 
-        let ActionValue( supply_diff, q_tokens_diff, principal_diff, interest_diff, extra_interest_repaid ) = action_value;
+        let ActionValue(
+            supply_diff,
+            q_tokens_diff,
+            principal_diff,
+            interest_diff,
+            extra_interest_repaid,
+        ) = action_value;
 
         assert_eq!(supply_diff, BigInt::from(800_000_000));
         assert_eq!(q_tokens_diff, BigInt::from(38_038_320_247u64));

@@ -3,11 +3,11 @@ use anyhow::Context;
 use betterfrost_client::Client;
 use hose_submission::NodeClient;
 use hose_submission::OgmiosClient;
+use hose_submission::SubmitTx;
 use pallas::ledger::primitives::{conway::Tx, Fragment};
 use simple_tx::simple_transaction;
 use simple_tx::TargetUser;
 use sqlx::postgres::PgPoolOptions;
-use hose_submission::SubmitTx;
 
 mod config;
 mod simple_tx;
@@ -56,9 +56,7 @@ async fn main() -> anyhow::Result<()> {
     let result = if let Some(ogmios_url) = config.ogmios_url.clone() {
         let mut ogmios = OgmiosClient::new(&ogmios_url).await?;
 
-        ogmios
-            .submit_tx(&minicbor::to_vec(&conway_tx)?)
-            .await?
+        ogmios.submit_tx(&minicbor::to_vec(&conway_tx)?).await?
     } else {
         direct_to_node
             .submit_tx(&minicbor::to_vec(&conway_tx)?)
