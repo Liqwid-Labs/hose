@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub enum RequestMethod {
     SubmitTransaction,
     EvaluateTransaction,
+    NetworkGenesisConfiguration,
 }
 
 impl From<RequestMethod> for String {
@@ -11,6 +12,7 @@ impl From<RequestMethod> for String {
         match method {
             RequestMethod::SubmitTransaction => "submitTransaction".into(),
             RequestMethod::EvaluateTransaction => "evaluateTransaction".into(),
+            RequestMethod::NetworkGenesisConfiguration => "queryNetworkGenesisConfiguration".into(),
         }
     }
 }
