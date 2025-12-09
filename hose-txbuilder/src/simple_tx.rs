@@ -1,4 +1,4 @@
-use betterfrost_client::addresses::{self as betterfrost, AddressUtxo};
+use betterfrost_client::v0::addresses::{self as betterfrost, AddressUtxo};
 use pallas::{
     applying::MultiEraProtocolParameters,
     ledger::addresses::{self, Address, PaymentKeyHash},
@@ -90,7 +90,7 @@ pub fn address_payment_key_hash(address: &Address) -> PaymentKeyHash {
 }
 
 pub async fn simple_transaction(
-    client: &betterfrost_client::Client,
+    client: &betterfrost_client::v0::Client,
     address: Address,
     config: &Config,
 ) -> Result<BuiltTransaction> {

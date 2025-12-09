@@ -20,9 +20,9 @@ hex = { workspace = true }
 minicbor = { workspace = true }
 
 hose-primitives = { path = "../hose-primitives" }
-hose-blueprint = { path = "../hose-blueprint" }
-hose-submission = { path = "../hose-submission" }
+hose-submission = { path = "../hose-submission", features = ["node"] }
 
+polymer = { workspace = true }
 betterfrost_client = { workspace = true }
 sqlx = { version = "0.8.2", features = ["postgres", "runtime-tokio-rustls", "bigdecimal", "json"] }
 

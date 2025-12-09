@@ -15,14 +15,14 @@ use hose_primitives::NetworkId;
 pub struct NodeClient<'a> {
     pub network: NetworkId,
     pub socket_path: PathBuf,
-    pub betterfrost_client: &'a betterfrost_client::Client,
+    pub betterfrost_client: &'a betterfrost_client::v0::Client,
 }
 
 impl<'a> NodeClient<'a> {
     pub fn new(
         network: NetworkId,
         socket_path: PathBuf,
-        betterfrost_client: &'a betterfrost_client::Client,
+        betterfrost_client: &'a betterfrost_client::v0::Client,
     ) -> Self {
         Self {
             network,
@@ -86,7 +86,7 @@ impl SubmitTx for NodeClient<'_> {
 
 async fn query_utxos<'a>(
     tx: &MultiEraTx<'a>,
-    betterfrost: &betterfrost_client::Client,
+    betterfrost: &betterfrost_client::v0::Client,
 ) -> anyhow::Result<UTxOs<'a>> {
     let refs = tx
         .consumes()

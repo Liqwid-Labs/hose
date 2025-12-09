@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = [ "hose-blueprint", "hose-primitives", "hose-submission", "hose-txbuilder", "hose-blueprint/test" ]
+members = [ "hose-primitives", "hose-submission", "hose-txbuilder" ]
 
 [workspace.dependencies]
 thiserror = "2.0"
@@ -12,7 +12,8 @@ minicbor = "0.25.1"
 num-bigint = "0.4.6"
 num = "0.4.3"
 betterfrost_client = { git = "https://github.com/liqwid-labs/betterfrost" }
-pallas = { version = "0.32.0", features = ["applying", "unstable"] }
+polymer = { git = "https://github.com/liqwid-labs/polymer" }
+pallas = { version = "0.33.0", features = ["applying", "unstable"] }
 
 [workspace.dependencies.tokio]
 version = "1.43.0"

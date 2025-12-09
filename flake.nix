@@ -77,6 +77,8 @@
           packages = with pkgs; [
             doppler
             cargo
+            pkg-config
+            openssl
             rustc
             cargo-watch
             rust-analyzer
