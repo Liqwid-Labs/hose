@@ -1,8 +1,8 @@
 <div align="center">
     <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="./assets/hose-dark.svg">
-        <source media="(prefers-color-scheme: light)" srcset="./assets/hose-light.svg">
-        <img src="./assets/hose-light.svg" alt="hose" width="500">
+        <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/hose-dark.svg">
+        <source media="(prefers-color-scheme: light)" srcset="./docs/assets/hose-light.svg">
+        <img src="./docs/assets/hose-light.svg" alt="hose" width="500">
     </picture>
     <hr />
         <h3 align="center" style="border-bottom: none">A modern off-chain framework</h3>
