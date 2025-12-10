@@ -1,10 +1,9 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::define_ogmios_error;
-
 use super::codec::{Language, RedeemerPointer, TxOutputPointer};
 use super::evaluate::ExecutionUnits;
+use crate::define_ogmios_error;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScriptError {

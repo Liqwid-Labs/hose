@@ -1,15 +1,13 @@
 //! High-level transaction builder API
 
-use hydrant::primitives::Address;
+use pallas::ledger::addresses::Address;
 use pallas::txbuilder::StagingTransaction;
 
-use crate::{evaluator::Evaluator, fetcher::Fetcher, selector::Selector, submitter::Submitter};
+use crate::providers::ogmios::OgmiosClient;
+use crate::submitter::Submitter;
 
-pub struct TxBuilder<Eval: Evaluator> {
-    pub fetcher: Box<dyn Fetcher>,
-    pub selector: Box<dyn Selector>,
-    pub evaluator: Box<Eval>,
-    pub submitter: Box<dyn Submitter>,
+pub struct TxBuilder {
+    ogmios: OgmiosClient,
     body: StagingTransaction,
     change_address: Address,
 }

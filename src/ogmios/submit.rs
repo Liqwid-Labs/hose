@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::define_ogmios_error;
-
 use super::codec::{AdaBalance, Balance, RedeemerPointer, TxCbor, ValidityInterval};
 use super::script::ScriptPurpose;
 use super::utxo::Utxo;
+use crate::define_ogmios_error;
 
 // -----------
 // Request
@@ -12,7 +11,7 @@ use super::utxo::Utxo;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct EvaluateRequestParams {
+pub struct SubmitRequestParams {
     pub transaction: TxCbor,
 }
 
@@ -259,10 +258,21 @@ define_ogmios_error! {
         },
         3168 => EmptyTreasuryWithdrawal,
         3997 => UnexpectedMempoolError(Value),
-        3998 => UnrecognizedCertificateType
+        3998 => UnrecognizedCertificateType,
+        -32602 => Deserialization {
+            byron: String,
+            shelley: String,
+            allegra: String,
+            mary: String,
+            alonzo: String,
+            babbage: String,
+            conway: String,
+        },
+        _ => Unknown { error: Value }
     }
 }
 
+#[derive(Debug, Clone, Deserialize)]
 pub struct CommitteeMember {
     /// Hex-encoded 28-byte blake2b hash digest
     pub id: String,
@@ -291,3 +301,10 @@ pub struct InsufficientlyFundedOutput {
     pub output: Utxo,
     pub minimum_required_value: AdaBalance,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SubmitResult {
+    pub transaction: TxId,
+}
+
+pub type SubmitResponse = RpcResponse<SubmitResult, EvaluationError>;

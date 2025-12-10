@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::define_ogmios_error;
-
 use super::*;
+use crate::define_ogmios_error;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]

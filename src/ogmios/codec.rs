@@ -1,11 +1,9 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RpcRequest<T: Serialize> {
     pub jsonrpc: String,
     pub method: String,
-    pub id: Uuid,
     pub params: T,
 }
 
@@ -29,7 +27,6 @@ impl<T, E> Into<Result<T, E>> for RpcResponse<T, E> {
 pub struct RpcSuccess<T> {
     pub jsonrpc: String,
     pub method: String,
-    pub id: Uuid,
     pub result: T,
 }
 
@@ -37,7 +34,6 @@ pub struct RpcSuccess<T> {
 pub struct RpcError<T> {
     pub jsonrpc: String,
     pub method: String,
-    pub id: Uuid,
     pub error: T,
 }
 
@@ -156,6 +152,12 @@ pub struct ProtocolVersion {
     pub major: u32,
     pub minor: u32,
     pub patch: Option<u32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TxId {
+    /// Hex-encoded 32-byte blake2b hash digest
+    pub id: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::define_ogmios_error;
-
 use super::codec::*;
 use super::script::ScriptError;
 use super::utxo::Utxo;
+use crate::define_ogmios_error;
 
 // -----------
 // Request

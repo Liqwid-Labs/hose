@@ -1,7 +1,6 @@
 use reqwest::Url;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use uuid::Uuid;
 
 pub mod codec;
 pub mod evaluate;
@@ -11,6 +10,7 @@ pub mod utxo;
 
 use codec::{RpcRequest, RpcResponse, TxCbor, TxOutputPointer};
 use evaluate::{EvaluateRequestParams, Evaluation, EvaluationError};
+use submit::{SubmitError, SubmitRequestParams, SubmitResult};
 use utxo::{Utxo, UtxoError, UtxoRequestParams};
 
 pub struct OgmiosClient {
@@ -18,6 +18,7 @@ pub struct OgmiosClient {
     client: reqwest::Client,
 }
 
+// TODO: handle reqwest error
 impl OgmiosClient {
     pub fn new(url: Url) -> Self {
         Self {
@@ -36,7 +37,6 @@ impl OgmiosClient {
             .json(&RpcRequest {
                 jsonrpc: "2.0".to_string(),
                 method: method.to_string(),
-                id: Uuid::new_v4(),
                 params,
             })
             .send()
@@ -56,8 +56,19 @@ impl OgmiosClient {
             },
             additional_utxo,
         };
-        // TODO: handle reqwest error
         self.request("evaluateTransaction", params)
+            .await
+            .unwrap()
+            .into()
+    }
+
+    pub async fn submit(&self, tx_cbor: &[u8]) -> Result<SubmitResult, SubmitError> {
+        let params = SubmitRequestParams {
+            transaction: TxCbor {
+                cbor: hex::encode(tx_cbor),
+            },
+        };
+        self.request("submitTransaction", params)
             .await
             .unwrap()
             .into()
@@ -67,21 +78,19 @@ impl OgmiosClient {
         let params = UtxoRequestParams::ByAddress {
             addresses: addresses.iter().map(|s| s.to_string()).collect(),
         };
-        // TODO: handle reqwest error
         self.request("queryLedgerState/utxo", params)
             .await
             .unwrap()
             .into()
     }
 
-    pub async fn utxos_by_output_reference(
+    pub async fn utxos_by_output(
         &self,
-        output_references: &[TxOutputPointer],
+        output_pointers: &[TxOutputPointer],
     ) -> Result<Vec<Utxo>, UtxoError> {
         let params = UtxoRequestParams::ByOutputReference {
-            output_references: output_references.to_vec(),
+            output_references: output_pointers.to_vec(),
         };
-        // TODO: handle reqwest error
         self.request("queryLedgerState/utxo", params)
             .await
             .unwrap()
