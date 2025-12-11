@@ -3,15 +3,33 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     crane.url = "github:ipetkov/crane";
+    rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
-  outputs = { self, nixpkgs, crane, flake-utils, ... }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      crane,
+      flake-utils,
+      rust-overlay,
+      ...
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
-        craneLib = crane.mkLib pkgs;
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ (import rust-overlay) ];
+        };
 
         inherit (pkgs) lib;
+
+        toolchain = pkgs.rust-bin.nightly.latest.default.override {
+          extensions = [ "rust-src" ];
+        };
+
+        craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
 
         unfilteredRoot = ./.; # The original, unfiltered source
         src = lib.fileset.toSource {
@@ -28,10 +46,14 @@
           # tests require live DB and SaaS blockfrost, so it requires network access
           doCheck = false;
         };
-        hose = craneLib.buildPackage (commonArgs // {
-          cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-        });
-      in {
+        hose = craneLib.buildPackage (
+          commonArgs
+          // {
+            cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+          }
+        );
+      in
+      {
         checks = { inherit hose; };
 
         packages.default = hose;
@@ -55,6 +77,8 @@
           packages = with pkgs; [
             doppler
             cargo
+            pkg-config
+            openssl
             rustc
             cargo-watch
             rust-analyzer
@@ -62,5 +86,6 @@
             (python3.withPackages (ps: with ps; [ toml ]))
           ];
         };
-      });
+      }
+    );
 }
