@@ -1,9 +1,16 @@
-use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
-use super::codec::{AdaBalance, Balance, RedeemerPointer, TxCbor, ValidityInterval};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use super::codec::{
+    AdaBalance, AdaBalanceDelta, Balance, CredentialOrigin, ExecutionUnits, Language,
+    RedeemerPointer, StakePoolId, TxCbor, TxId, TxOutput, TxOutputPointer, ValidityInterval,
+};
 use super::script::ScriptPurpose;
 use super::utxo::Utxo;
 use crate::define_ogmios_error;
+use crate::ogmios::codec::{Era, InputSource, NumberOfBytes, ProtocolVersion};
 
 // -----------
 // Request
@@ -20,6 +27,7 @@ pub struct SubmitRequestParams {
 // -----------
 
 #[derive(Debug, Clone, Deserialize)]
+#[doc = "hi"]
 struct MetadataHash {
     /// Hex-encoded 32-byte blake2b hash digest
     hash: String,
@@ -33,7 +41,7 @@ define_ogmios_error! {
             ledger_era: Era,
         },
         3100 => InvalidSignatories {
-            /// Hex-encoded 32-byte verification key hashes
+            #[doc="Hex-encoded 32-byte verification key hashes"]
             invalid_signatories: Vec<String>,
         },
         3101 => MissingSignatories {
@@ -53,7 +61,7 @@ define_ogmios_error! {
         },
         3106 => MissingMetadata {
             metadata: MetadataHash,
-        }
+        },
         3107 => MetadataHashMismatch {
             provided: MetadataHash,
             computed: MetadataHash,
@@ -117,7 +125,7 @@ define_ogmios_error! {
             discriminated_type: NetworkMismatchDiscriminatedType,
             /// Array of addresses (addr1), reward accounts (stake1) or stake pools (pool1)
             invalid_entities: Option<Vec<String>>,
-        }
+        },
         3125 => InsufficientlyFundedOutputs {
             insufficiently_funded_outputs: Vec<InsufficientlyFundedOutput>
         },
@@ -157,7 +165,7 @@ define_ogmios_error! {
         },
         3137 => UnauthorizedVotes {
             unauthorized_votes: Vec<Value>, // TODO:
-        }
+        },
         3138 => UnknownGovernanceProposals {
             unknown_proposals: Vec<Value>, // TODO:
         },
@@ -307,4 +315,4 @@ pub struct SubmitResult {
     pub transaction: TxId,
 }
 
-pub type SubmitResponse = RpcResponse<SubmitResult, EvaluationError>;
+// pub type SubmitResponse = RpcResponse<SubmitResult, EvaluationError>;

@@ -3,8 +3,7 @@
 use pallas::ledger::addresses::Address;
 use pallas::txbuilder::StagingTransaction;
 
-use crate::providers::ogmios::OgmiosClient;
-use crate::submitter::Submitter;
+use crate::ogmios::OgmiosClient;
 
 pub struct TxBuilder {
     ogmios: OgmiosClient,
