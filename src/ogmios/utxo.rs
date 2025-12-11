@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 use super::*;
-use crate::define_ogmios_error;
+use crate::{
+    define_ogmios_error,
+    ogmios::codec::{Era, TxPointer},
+};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]

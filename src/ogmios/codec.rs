@@ -1,4 +1,6 @@
-use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RpcRequest<T: Serialize> {
@@ -68,6 +70,13 @@ pub struct TxOutput {
     /// Hex-encoded CBOR value
     datum: Option<String>,
     // TODO: script
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecutionUnits {
+    pub memory: u64,
+    pub cpu: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -148,6 +157,12 @@ pub struct ValidityInterval {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct NumberOfBytes {
+    pub bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProtocolVersion {
     pub major: u32,
     pub minor: u32,
@@ -166,15 +181,17 @@ pub struct StakePoolId {
     pub id: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct NumberOfBytes {
-    pub bytes: u64,
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Balance {
     pub lovelace: u64,
     pub assets: Vec<Asset>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Asset {
+    pub policy: String,
+    pub name: String,
+    pub value: u64,
 }
 
 impl<'de> Deserialize<'de> for Balance {
@@ -263,7 +280,10 @@ macro_rules! define_ogmios_error {
             $(
                 $(#[$variant_meta:meta])*
                 $code:literal => $variant:ident $({
-                    $($field:ident: $ty:ty),* $(,)?
+                    $(
+                        $(#[$field_meta:meta])*
+                        $field:ident: $ty:ty
+                    ),* $(,)?
                 })?
                 $(( $single_ty:ty ))?
             ),+
@@ -278,7 +298,10 @@ macro_rules! define_ogmios_error {
                 $(#[$variant_meta])*
                 $variant {
                     message: String,
-                    $($($field: $ty,)*)?
+                    $($(
+                        $(#[$field_meta])*
+                        $field: $ty,
+                    )*)?
                     $(data: $single_ty,)?
                 },
             )+
