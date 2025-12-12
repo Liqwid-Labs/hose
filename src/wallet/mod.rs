@@ -1,20 +1,21 @@
 use pallas::crypto::key::ed25519::TryFromSecretKeyExtendedError;
-use pallas::ledger::addresses::Network;
+use pallas::ledger::addresses::{Network, ShelleyAddress};
 use thiserror::Error;
 
 mod builder;
-mod hd;
+mod hd_key;
+mod key;
 pub use builder::{AddressType, WalletBuilder};
-pub use hd::{Bip32PrivateKey, Bip32PublicKey};
+pub use hd_key::HDPrivateKey;
+pub use key::PrivateKey;
 
 pub struct Wallet {
     network: Network,
-    address: String,
-    private_key: Bip32PrivateKey,
+    address: ShelleyAddress,
     /// Key used for signing/receiving transactions (derivation path: m/1852'/1815'/0'/0/address_index)
-    payment_key: Bip32PrivateKey,
+    payment_key: PrivateKey,
     /// Key used for receiving staking rewards (derivation path: m/1852'/1815'/0'/2/address_index)
-    stake_key: Bip32PrivateKey,
+    stake_key: Option<PrivateKey>,
 }
 
 impl Wallet {
@@ -26,28 +27,25 @@ impl Wallet {
         self.network
     }
 
-    pub fn address(&self) -> &str {
+    pub fn address(&self) -> &ShelleyAddress {
         &self.address
     }
 }
 
 #[derive(Error, Debug)]
 pub enum Error {
-    /// Private key wrapper data of unexpected length
-    #[error("Wrapped private key data invalid length")]
-    WrapperDataInvalidSize,
-    /// Failed to decrypt private key wrapper data
-    #[error("Failed to decrypt private key wrapper data")]
-    WrapperDataFailedToDecrypt,
     /// Unexpected bech32 HRP prefix
-    #[error("Unexpected bech32 HRP prefix")]
-    InvalidBech32Hrp,
+    #[error("Unexpected bech32 HRP prefix: {0}")]
+    InvalidBech32Hrp(String),
     /// Unable to decode bech32 string
     #[error("Unable to decode bech32: {0}")]
     InvalidBech32(#[from] bech32::DecodeError),
-    /// Decoded bech32 data of unexpected length
-    #[error("Decoded bech32 data of unexpected length")]
-    UnexpectedBech32Length,
+    /// Decoded data of unexpected length
+    #[error("Decoded data of unexpected length")]
+    UnexpectedKeyLength,
+    /// Unable to decode hex string
+    #[error("Unable to decode hex: {0}")]
+    InvalidHex(#[from] hex::FromHexError),
     /// Error relating to ed25519-bip32 private key
     #[error("Error relating to ed25519-bip32 private key: {0}")]
     Xprv(#[from] ed25519_bip32::PrivateKeyError),
