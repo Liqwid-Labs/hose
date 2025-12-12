@@ -10,6 +10,7 @@ path = "src/main.rs"
 [dependencies]
 tokio = { version = "1.43.0", features = ["full"] }
 tracing = "0.1.41"
+tracing-subscriber = "0.3.1"
 thiserror = "2.0"
 anyhow = "1.0"
 serde = "1.0"
@@ -19,11 +20,23 @@ hydrant = { git = "https://github.com/liqwid-labs/hydrant" }
 polymer = { git = "https://github.com/liqwid-labs/polymer" }
 pallas = { version = "1.0.0-alpha.3", features = ["phase2"] }
 
+# For wallet management
+bech32 = "0.9.1"
+bip39 = { version = "2.0.0", features = ["rand_core"] }
+cryptoxide = "0.4.4"
+ed25519-bip32 = "0.4.1"
+
+
+dotenv = "0.15.0"
+clap = { version = "4.5.53", features = ["derive", "env"] }
 minicbor = "2.1.3"
 hex = "0.4.3"
 num-bigint = "0.4.6"
 num = "0.4.3"
-reqwest = { version = "0.12.25", features = ["rustls-tls", "json"], default-features = false, optional = true }
+reqwest = { version = "0.12.25", features = [
+    "rustls-tls",
+    "json",
+], default-features = false, optional = true }
 serde_repr = "0.1.20"
 
 [features]
