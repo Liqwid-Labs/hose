@@ -9,12 +9,6 @@ use crate::define_ogmios_error;
 // Request
 // -----------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExecutionUnits {
-    pub memory: u64,
-    pub cpu: u64,
-}
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EvaluateRequestParams {

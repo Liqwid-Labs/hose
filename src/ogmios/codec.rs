@@ -57,6 +57,17 @@ pub struct TxOutputPointer {
     pub index: u32,
 }
 
+impl From<hydrant::primitives::TxOutputPointer> for TxOutputPointer {
+    fn from(ptr: hydrant::primitives::TxOutputPointer) -> Self {
+        Self {
+            transaction: TxPointer {
+                id: hex::encode(*ptr.hash),
+            },
+            index: ptr.index as u32,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TxOutput {
@@ -233,18 +244,20 @@ impl<'de> Deserialize<'de> for Balance {
 pub struct AdaBalance {
     pub lovelace: u64,
 }
-
 impl<'de> Deserialize<'de> for AdaBalance {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let map: HashMap<String, u64> = HashMap::deserialize(deserializer)?;
+        let map: HashMap<String, HashMap<String, u64>> = HashMap::deserialize(deserializer)?;
 
-        let lovelace = map
+        let ada_map = map
+            .get("ada")
+            .ok_or_else(|| serde::de::Error::missing_field("ada"))?;
+
+        let lovelace = *ada_map
             .get("lovelace")
-            .copied()
-            .ok_or_else(|| serde::de::Error::missing_field("lovelace"))?;
+            .ok_or_else(|| serde::de::Error::missing_field("ada.lovelace"))?;
 
         Ok(AdaBalance { lovelace })
     }
@@ -260,12 +273,15 @@ impl<'de> Deserialize<'de> for AdaBalanceDelta {
     where
         D: Deserializer<'de>,
     {
-        let map: HashMap<String, i64> = HashMap::deserialize(deserializer)?;
+        let map: HashMap<String, HashMap<String, i64>> = HashMap::deserialize(deserializer)?;
 
-        let lovelace = map
+        let ada_map = map
+            .get("ada")
+            .ok_or_else(|| serde::de::Error::missing_field("ada"))?;
+
+        let lovelace = *ada_map
             .get("lovelace")
-            .copied()
-            .ok_or_else(|| serde::de::Error::missing_field("lovelace"))?;
+            .ok_or_else(|| serde::de::Error::missing_field("ada.lovelace"))?;
 
         Ok(AdaBalanceDelta { lovelace })
     }

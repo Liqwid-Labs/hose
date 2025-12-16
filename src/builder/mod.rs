@@ -6,6 +6,8 @@ use pallas::ledger::primitives::NetworkId;
 use pallas::txbuilder::StagingTransaction;
 pub use pallas::txbuilder::{Input, Output};
 
+pub mod fee;
+
 use crate::ogmios::OgmiosClient;
 
 pub struct TxBuilder {

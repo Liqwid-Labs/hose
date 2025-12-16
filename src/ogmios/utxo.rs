@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+use super::codec::{Era, TxPointer};
+use super::script::Script;
 use super::*;
-use crate::{
-    define_ogmios_error,
-    ogmios::codec::{Era, TxPointer},
-};
+use crate::define_ogmios_error;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
@@ -32,7 +31,7 @@ pub struct Utxo {
     pub datum_hash: Option<String>,
     /// A hex-encoded CBOR value
     pub datum: Option<String>,
-    // TODO: script
+    pub script: Option<Script>,
 }
 
 define_ogmios_error! {

@@ -1,9 +1,62 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::codec::{Language, RedeemerPointer, TxOutputPointer};
-use super::evaluate::ExecutionUnits;
+use super::codec::{ExecutionUnits, Language, RedeemerPointer, TxOutputPointer};
 use crate::define_ogmios_error;
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "language")]
+pub enum Script {
+    #[serde(rename = "native")]
+    Native {
+        json: ScriptClause,
+        /// Hex-encoded
+        cbor: Option<String>,
+    },
+    #[serde(rename = "plutus:v1")]
+    PlutusV1 { cbor: String },
+    #[serde(rename = "plutus:v2")]
+    PlutusV2 { cbor: String },
+    #[serde(rename = "plutus:v3")]
+    PlutusV3 { cbor: String },
+}
+
+impl Script {
+    pub fn cbor(&self) -> Option<&str> {
+        match self {
+            Script::Native { cbor, .. } => cbor.as_ref().map(|x| x.as_str()),
+            Script::PlutusV1 { cbor, .. } => Some(cbor),
+            Script::PlutusV2 { cbor, .. } => Some(cbor),
+            Script::PlutusV3 { cbor, .. } => Some(cbor),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "clause")]
+#[serde(rename_all = "camelCase")]
+pub enum ScriptClause {
+    Signature {
+        /// Hex-encoded 28-byte blake2b hash digest
+        from: String,
+    },
+    Any {
+        from: Vec<Script>,
+    },
+    All {
+        from: Vec<Script>,
+    },
+    Some {
+        at_least: usize,
+        from: Vec<Script>,
+    },
+    Before {
+        slot: u64,
+    },
+    After {
+        slot: u64,
+    },
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScriptError {

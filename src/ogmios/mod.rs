@@ -4,6 +4,7 @@ use serde::de::DeserializeOwned;
 
 pub mod codec;
 pub mod evaluate;
+pub mod pparams;
 pub mod script;
 pub mod submit;
 pub mod utxo;
