@@ -1,6 +1,6 @@
-use reqwest::Url;
-use serde::Serialize;
+use reqwest::{Response, Url};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
 pub mod codec;
 pub mod evaluate;
@@ -13,6 +13,9 @@ use codec::{RpcRequest, RpcResponse, TxCbor, TxOutputPointer};
 use evaluate::{EvaluateRequestParams, Evaluation, EvaluationError};
 use submit::{SubmitError, SubmitRequestParams, SubmitResult};
 use utxo::{Utxo, UtxoError, UtxoRequestParams};
+
+use crate::ogmios::pparams::ProtocolParams;
+use crate::ogmios::utxo::ProtocolParamsError;
 
 pub struct OgmiosClient {
     url: Url,
@@ -31,9 +34,10 @@ impl OgmiosClient {
     async fn request<T: Serialize, U: DeserializeOwned, E: DeserializeOwned>(
         &self,
         method: &str,
-        params: T,
+        params: Option<T>,
     ) -> Result<RpcResponse<U, E>, reqwest::Error> {
-        self.client
+        let res = self
+            .client
             .post(self.url.clone())
             .json(&RpcRequest {
                 jsonrpc: "2.0".to_string(),
@@ -41,9 +45,8 @@ impl OgmiosClient {
                 params,
             })
             .send()
-            .await?
-            .json()
-            .await
+            .await?;
+        res.json().await
     }
 
     pub async fn evaluate(
@@ -57,7 +60,7 @@ impl OgmiosClient {
             },
             additional_utxo,
         };
-        self.request("evaluateTransaction", params)
+        self.request("evaluateTransaction", Some(params))
             .await
             .unwrap()
             .into()
@@ -69,7 +72,7 @@ impl OgmiosClient {
                 cbor: hex::encode(tx_cbor),
             },
         };
-        self.request("submitTransaction", params)
+        self.request("submitTransaction", Some(params))
             .await
             .unwrap()
             .into()
@@ -79,7 +82,7 @@ impl OgmiosClient {
         let params = UtxoRequestParams::ByAddress {
             addresses: addresses.iter().map(|s| s.to_string()).collect(),
         };
-        self.request("queryLedgerState/utxo", params)
+        self.request("queryLedgerState/utxo", Some(params))
             .await
             .unwrap()
             .into()
@@ -92,9 +95,16 @@ impl OgmiosClient {
         let params = UtxoRequestParams::ByOutputReference {
             output_references: output_pointers.to_vec(),
         };
-        self.request("queryLedgerState/utxo", params)
+        self.request("queryLedgerState/utxo", Some(params))
             .await
             .unwrap()
+            .into()
+    }
+
+    pub async fn protocol_params(&self) -> Result<ProtocolParams, ProtocolParamsError> {
+        self.request("queryLedgerState/protocolParameters", None::<()>)
+            .await
+            .expect("failed to get protocol parameters")
             .into()
     }
 }

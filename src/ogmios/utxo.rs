@@ -49,3 +49,16 @@ define_ogmios_error! {
 }
 
 pub type UtxoResponse = RpcResponse<Vec<Utxo>, UtxoError>;
+
+define_ogmios_error! {
+    #[derive(Debug, Clone)]
+    pub enum ProtocolParamsError {
+        2001 => EraMismatch {
+            query_era: Era,
+            ledger_era: Era,
+        },
+        2002 => UnavailableInCurrentEra,
+        2003 => StateAcquiredExpired(String)
+        _ => Unknown { error: Value }
+    }
+}

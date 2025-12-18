@@ -1,20 +1,25 @@
 //! High-level transaction builder API
 
+use hydrant::primitives::TxHash;
 use pallas::crypto::hash::Hash;
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
-use pallas::txbuilder::StagingTransaction;
+use pallas::txbuilder::{BuildConway, BuiltTransaction, StagingTransaction};
 pub use pallas::txbuilder::{Input, Output};
 
 pub mod fee;
 pub mod selection;
 
+use crate::builder::fee::calculate_min_fee;
 use crate::ogmios::OgmiosClient;
+use crate::ogmios::pparams::ProtocolParams;
+use crate::wallet::Wallet;
 
 pub struct TxBuilder {
     body: StagingTransaction,
     network: NetworkId,
     collateral_address: Option<Address>,
+    change_address: Option<Address>,
 }
 
 // TODO: redeemers, auxillary data, language view, mint asset, delegation, governance
@@ -24,6 +29,7 @@ impl TxBuilder {
             body: StagingTransaction::new(),
             network,
             collateral_address: None,
+            change_address: None,
         }
     }
 
@@ -86,5 +92,101 @@ impl TxBuilder {
     pub fn add_signer(mut self, pub_key_hash: Hash<28>) -> Self {
         self.body = self.body.disclosed_signer(pub_key_hash);
         self
+    }
+
+    pub fn set_change_address(mut self, address: Address) -> Self {
+        self.change_address = Some(address);
+        self
+    }
+
+    pub async fn build(
+        self,
+        ogmios: &OgmiosClient,
+        pparams: &ProtocolParams,
+    ) -> anyhow::Result<BuiltTx> {
+        let body = self.body.clone();
+        let fee = calculate_min_fee(&ogmios, &body, pparams).await;
+        let body = body.fee(fee);
+        let change_address = self.change_address.unwrap_or_else(|| {
+            // Get rid of clone
+            let outputs = &body.clone().outputs.unwrap_or_default();
+            let address = outputs.into_iter().last().unwrap().address.clone();
+            address.0
+        });
+        let body = simple_balance_fee(body, change_address, fee)?;
+        // TODO: handle change address
+        match body.build_conway_raw() {
+            Ok(tx) => Ok(BuiltTx::new(self.body, tx, self.network)),
+            Err(e) => Err(anyhow::anyhow!("Failed to build transaction: {}", e)),
+        }
+    }
+}
+
+fn simple_balance_fee(
+    tx: StagingTransaction,
+    change_address: Address,
+    fee: u64,
+) -> anyhow::Result<StagingTransaction> {
+    let outputs = tx.outputs.clone().unwrap_or_default();
+    let output_to_pay_fee: Option<usize> =
+        outputs
+            .iter()
+            .enumerate()
+            .find_map(|(i, o)| -> Option<usize> {
+                if o.address.0 == change_address && o.lovelace > fee {
+                    Some(i)
+                } else {
+                    None
+                }
+            });
+
+    let tx = if let Some(index) = output_to_pay_fee {
+        let output = outputs[index].clone();
+        let tx = tx.remove_output(index);
+        let tx = tx.output(Output {
+            lovelace: output.lovelace - fee,
+            ..output
+        });
+        tx
+    } else {
+        tx
+    };
+
+    Ok(tx)
+}
+
+pub struct BuiltTx {
+    staging: StagingTransaction,
+    tx: BuiltTransaction,
+    network: NetworkId,
+}
+
+impl BuiltTx {
+    pub fn new(staging: StagingTransaction, tx: BuiltTransaction, network: NetworkId) -> Self {
+        Self {
+            staging,
+            tx,
+            network,
+        }
+    }
+
+    pub fn sign(self, wallet: &Wallet) -> anyhow::Result<BuiltTx> {
+        let tx = wallet.sign(&self.tx)?;
+        Ok(BuiltTx::new(self.staging, tx, self.network))
+    }
+
+    pub fn cbor(&self) -> anyhow::Result<Vec<u8>> {
+        let cbor = self.tx.tx_bytes.0.clone();
+        Ok(cbor)
+    }
+
+    pub fn cbor_hex(&self) -> anyhow::Result<String> {
+        let cbor = self.cbor()?;
+        let hex = hex::encode(cbor);
+        Ok(hex)
+    }
+
+    pub fn hash(&self) -> anyhow::Result<TxHash> {
+        Ok(self.tx.tx_hash.0.into())
     }
 }

@@ -48,6 +48,6 @@ pub struct MinFeeReferenceScripts {
     /// Range (in bytes) at which the cost scales by the multiplier
     pub range: u32,
     /// Cost per byte, multiplied by `multiplier ^ range_index`
-    pub base: u64,
+    pub base: f64,
     pub multiplier: f64,
 }

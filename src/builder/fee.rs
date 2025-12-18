@@ -1,4 +1,5 @@
 use hydrant::primitives::TxOutputPointer;
+use num::{BigRational, FromPrimitive as _, ToPrimitive as _};
 use pallas::txbuilder::{BuildConway, StagingTransaction};
 
 use crate::ogmios::OgmiosClient;
@@ -13,16 +14,23 @@ pub async fn calculate_min_fee(
     let built_tx = tx.clone().build_conway_raw().unwrap();
 
     // Base fee + fee from size
-    let mut min_fee = pparams.min_fee_constant.lovelace;
+    let mut min_fee = BigRational::from_integer(pparams.min_fee_constant.lovelace.into());
     let tx_size = built_tx.tx_bytes.0.len() as u64;
-    min_fee += tx_size * pparams.min_fee_constant.lovelace;
+    min_fee += BigRational::from_integer(tx_size.into())
+        * BigRational::from_integer(pparams.min_fee_constant.lovelace.into());
 
     // Fee from scripts
     let evaluation = ogmios.evaluate(&built_tx.tx_bytes.0, vec![]).await.unwrap();
-    let total_cpu = evaluation.iter().map(|e| e.budget.cpu).sum::<u64>();
-    let total_mem = evaluation.iter().map(|e| e.budget.memory).sum::<u64>();
-    min_fee += total_cpu * pparams.script_execution_prices.cpu;
-    min_fee += total_mem * pparams.script_execution_prices.memory;
+    let total_cpu = evaluation
+        .iter()
+        .map(|e| e.budget.cpu.0.clone())
+        .sum::<BigRational>();
+    let total_mem = evaluation
+        .iter()
+        .map(|e| e.budget.memory.0.clone())
+        .sum::<BigRational>();
+    min_fee += total_cpu * pparams.script_execution_prices.cpu.0.clone();
+    min_fee += total_mem * pparams.script_execution_prices.memory.0.clone();
 
     // Fee from reference input script sizes
     // https://github.com/IntersectMBO/cardano-ledger/blob/master/docs/adr/2024-08-14_009-refscripts-fee-change.md
@@ -48,18 +56,28 @@ pub async fn calculate_min_fee(
         let base = pparams.min_fee_reference_scripts.base;
         let multiplier = pparams.min_fee_reference_scripts.multiplier;
         let steps = (total_script_size / range) as i32;
-        let cost_per_step = (range * base) as f64;
+        let cost_per_step = (range as f64 * base);
         for i in 0..steps {
-            min_fee += (cost_per_step * multiplier.powi(i + 1)).floor() as u64;
+            min_fee += BigRational::from_integer(
+                ((cost_per_step * multiplier.powi(i + 1)).floor() as u64).into(),
+            );
         }
 
         // Partial chunk
         let partial_chunk_bytes = total_script_size % range;
         if partial_chunk_bytes > 0 {
-            let base_cost = (partial_chunk_bytes * base) as f64;
-            min_fee += (base_cost * multiplier.powi(steps + 1)).floor() as u64;
+            let base_cost = (partial_chunk_bytes as f64 * base);
+            min_fee += BigRational::from_integer(
+                ((base_cost * multiplier.powi(steps + 1)).floor() as u64).into(),
+            );
         }
     }
 
     min_fee
+        .floor()
+        .to_integer()
+        .to_biguint()
+        .expect("failed to convert to biguint")
+        .to_u64()
+        .expect("failed to convert to u64")
 }

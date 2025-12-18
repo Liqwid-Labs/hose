@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 use std::iter::Sum;
 use std::ops::Deref;
+use std::str::FromStr as _;
 
 use hydrant::primitives::Policy;
+use num::BigRational;
 use serde::de::Unexpected;
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -10,7 +12,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 pub struct RpcRequest<T: Serialize> {
     pub jsonrpc: String,
     pub method: String,
-    pub params: T,
+    pub params: Option<T>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -90,8 +92,39 @@ pub struct TxOutput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionUnits {
-    pub memory: u64,
-    pub cpu: u64,
+    pub memory: Ratio,
+    pub cpu: Ratio,
+}
+
+#[derive(Debug, Clone)]
+pub struct Ratio(pub num_rational::BigRational);
+
+impl Into<BigRational> for Ratio {
+    fn into(self) -> BigRational {
+        self.0
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Ratio {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: String = Deserialize::deserialize(deserializer)?;
+        Ok(Ratio(
+            num_rational::BigRational::from_str(&s)
+                .map_err(|e| serde::de::Error::custom(e.to_string()))?,
+        ))
+    }
+}
+
+impl Serialize for Ratio {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.0.to_string())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
