@@ -1,6 +1,7 @@
 use pallas::crypto::key::ed25519::{self, TryFromSecretKeyExtendedError};
 use pallas::ledger::addresses::{Network, ShelleyAddress};
-use pallas::txbuilder::BuiltTransaction;
+use pallas::ledger::primitives::{Fragment as _, conway};
+use pallas::txbuilder::{BuiltTransaction, TxBuilderError};
 use thiserror::Error;
 
 mod builder;
@@ -9,6 +10,8 @@ mod key;
 pub use builder::{AddressType, WalletBuilder};
 pub use hd_key::HDPrivateKey;
 pub use key::PrivateKey;
+
+use crate::builder::BuiltTx;
 
 pub struct Wallet {
     network: Network,
@@ -37,7 +40,7 @@ impl Wallet {
     }
 
     pub fn sign(&self, tx: &BuiltTransaction) -> anyhow::Result<BuiltTransaction> {
-        let signature = self.payment_key.sign(tx.tx_bytes.0.clone());
+        let signature = self.payment_key.sign(tx.tx_hash.0);
         let signature = signature.as_ref().try_into().unwrap();
         let tx = tx.clone().add_signature(self.public_key(), signature)?;
         Ok(tx)

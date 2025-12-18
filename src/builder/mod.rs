@@ -94,7 +94,7 @@ impl TxBuilder {
         self
     }
 
-    pub fn set_change_address(mut self, address: Address) -> Self {
+    pub fn change_address(mut self, address: Address) -> Self {
         self.change_address = Some(address);
         self
     }
@@ -170,20 +170,25 @@ impl BuiltTx {
         }
     }
 
-    pub fn sign(self, wallet: &Wallet) -> anyhow::Result<BuiltTx> {
+    pub fn body(&self) -> &StagingTransaction {
+        &self.staging
+    }
+
+    pub fn sign(mut self, wallet: &Wallet) -> anyhow::Result<Self> {
         let tx = wallet.sign(&self.tx)?;
-        Ok(BuiltTx::new(self.staging, tx, self.network))
+        self.tx = tx;
+        Ok(self)
     }
 
-    pub fn cbor(&self) -> anyhow::Result<Vec<u8>> {
+    pub fn cbor(&self) -> Vec<u8> {
         let cbor = self.tx.tx_bytes.0.clone();
-        Ok(cbor)
+        cbor
     }
 
-    pub fn cbor_hex(&self) -> anyhow::Result<String> {
-        let cbor = self.cbor()?;
+    pub fn cbor_hex(&self) -> String {
+        let cbor = self.cbor();
         let hex = hex::encode(cbor);
-        Ok(hex)
+        hex
     }
 
     pub fn hash(&self) -> anyhow::Result<TxHash> {

@@ -49,9 +49,15 @@ pub async fn main() -> anyhow::Result<()> {
 
     info!("UTXOs: {:?}", utxos);
 
-    let tx = create_collateral_tx(network_id, utxos, wallet, &ogmios, &protocol_params).await?;
-    let cbor = tx.cbor_hex()?;
+    let tx = create_collateral_tx(network_id, utxos, &wallet, &ogmios, &protocol_params).await?;
+    let cbor = tx.cbor_hex();
     info!("CBOR: {:?}", cbor);
+
+    let tx = tx.sign(&wallet)?;
+
+    let res = ogmios.submit(&tx.cbor()).await?;
+
+    info!("Submitted transaction: {:?}", res);
 
     Ok(())
 }
@@ -59,7 +65,7 @@ pub async fn main() -> anyhow::Result<()> {
 async fn create_collateral_tx(
     network_id: NetworkId,
     utxos: Vec<Utxo>,
-    wallet: Wallet,
+    wallet: &Wallet,
     ogmios: &OgmiosClient,
     protocol_params: &ProtocolParams,
 ) -> anyhow::Result<BuiltTx> {
@@ -77,8 +83,7 @@ async fn create_collateral_tx(
             collateral_size,
         ))
         .build(ogmios, protocol_params)
-        .await?
-        .sign(&wallet)?;
+        .await?;
 
     Ok(tx)
 }
