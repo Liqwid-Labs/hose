@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::codec::{Era, TxPointer};
+use super::codec::{Balance, Era, TxPointer};
 use super::script::Script;
 use super::*;
 use crate::define_ogmios_error;
@@ -27,6 +27,7 @@ pub struct Utxo {
     /// New: `addr1q9d34spgg2kdy47n82e7x9pdd6vql6d2engxmpj20jmhuc2047yqd4xnh7u6u5jp4t0q3fkxzckph4tgnzvamlu7k5psuahzcp`
     /// Legacy: `DdzFFzCqrht8mbSTZHqpM2u4HeND2mdspsaBhdQ1BowPJBMzbDeBMeKgqdoKqo1D4sdPusEdZJVrFJRBBxX1jUEofNDYCJSZLg8MkyCE`
     pub address: String,
+    pub value: Balance,
     /// A Blake2b 32-byte hash digest, hex-encoded
     pub datum_hash: Option<String>,
     /// A hex-encoded CBOR value

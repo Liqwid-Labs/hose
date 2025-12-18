@@ -1,5 +1,9 @@
 use std::collections::HashMap;
+use std::iter::Sum;
+use std::ops::Deref;
 
+use hydrant::primitives::Policy;
+use serde::de::Unexpected;
 use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Debug, Clone, Serialize)]
@@ -195,14 +199,50 @@ pub struct StakePoolId {
 #[derive(Debug, Clone, Serialize)]
 pub struct Balance {
     pub lovelace: u64,
-    pub assets: Vec<Asset>,
+    pub assets: Assets,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Asset {
-    pub policy: String,
-    pub name: String,
-    pub value: u64,
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct Assets(HashMap<String, HashMap<String, u64>>);
+
+impl Deref for Assets {
+    type Target = HashMap<String, HashMap<String, u64>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Sum for Assets {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Assets::default(), |mut acc, assets| {
+            for (policy_id, asset_map) in assets.0.into_iter() {
+                let acc_asset_map = acc.0.entry(policy_id).or_default();
+                for (asset_name, quantity) in asset_map {
+                    *acc_asset_map.entry(asset_name).or_default() += quantity;
+                }
+            }
+            acc
+        })
+    }
+}
+
+impl From<&pallas::txbuilder::OutputAssets> for Assets {
+    fn from(map: &pallas::txbuilder::OutputAssets) -> Self {
+        Self(
+            map.iter()
+                .map(|(policy_id, asset_map)| {
+                    (
+                        hex::encode(policy_id.0),
+                        asset_map
+                            .iter()
+                            .map(|(asset_name, quantity)| (hex::encode(asset_name), *quantity))
+                            .collect::<HashMap<_, _>>(),
+                    )
+                })
+                .collect::<HashMap<_, _>>(),
+        )
+    }
 }
 
 impl<'de> Deserialize<'de> for Balance {
@@ -210,33 +250,20 @@ impl<'de> Deserialize<'de> for Balance {
     where
         D: Deserializer<'de>,
     {
-        let map: HashMap<String, HashMap<String, u64>> = HashMap::deserialize(deserializer)?;
+        let mut assets: HashMap<String, HashMap<String, u64>> = HashMap::deserialize(deserializer)?;
 
-        // Require "ada" entry to exist
-        let ada_map = map
+        // Require "ada.lovelace" entry to exist
+        let lovelace = *assets
             .get("ada")
-            .ok_or_else(|| serde::de::Error::missing_field("ada"))?;
-
-        // Require "lovelace" within "ada" to exist
-        let lovelace = *ada_map
+            .ok_or_else(|| serde::de::Error::missing_field("ada"))?
             .get("lovelace")
             .ok_or_else(|| serde::de::Error::missing_field("ada.lovelace"))?;
+        assets.remove("ada");
 
-        let mut assets = Vec::new();
-
-        for (policy, inner_map) in map {
-            if policy != "ada" {
-                for (name, value) in inner_map {
-                    assets.push(Asset {
-                        policy: policy.clone(),
-                        name,
-                        value,
-                    });
-                }
-            }
-        }
-
-        Ok(Balance { lovelace, assets })
+        Ok(Balance {
+            lovelace,
+            assets: Assets(assets),
+        })
     }
 }
 

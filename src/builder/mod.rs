@@ -7,6 +7,7 @@ use pallas::txbuilder::StagingTransaction;
 pub use pallas::txbuilder::{Input, Output};
 
 pub mod fee;
+pub mod selection;
 
 use crate::ogmios::OgmiosClient;
 

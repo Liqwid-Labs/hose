@@ -1376,8 +1376,7 @@ dependencies = [
 [[package]]
 name = "pallas"
 version = "1.0.0-alpha.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0605daa84084821bb1351e6ab9c45dfb6008e4c6178f6344a1e1b342377f5540"
+source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e403d82a90900591ac26260854ad85b215d7"
 dependencies = [
  "pallas-addresses 1.0.0-alpha.3",
  "pallas-codec 1.0.0-alpha.3",
@@ -1411,8 +1410,7 @@ dependencies = [
 [[package]]
 name = "pallas-addresses"
 version = "1.0.0-alpha.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef0ef7593326952c54c2a3b74621a7b2db01a134a957063b9e1a02b4599fdf89"
+source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e403d82a90900591ac26260854ad85b215d7"
 dependencies = [
  "base58",
  "bech32 0.9.1",
@@ -1455,8 +1453,7 @@ dependencies = [
 [[package]]
 name = "pallas-codec"
 version = "1.0.0-alpha.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bbc692a7682eea0f17f02b2018ba41a8c18868d3d12d517d8f10bc4950082c4"
+source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e403d82a90900591ac26260854ad85b215d7"
 dependencies = [
  "hex",
  "minicbor 0.26.5",
@@ -1485,8 +1482,7 @@ dependencies = [
 [[package]]
 name = "pallas-configs"
 version = "1.0.0-alpha.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0645e6ae8f9cda02700525f6a053f273f301529bec85e58f51b346681cefb43d"
+source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e403d82a90900591ac26260854ad85b215d7"
 dependencies = [
  "base64 0.22.1",
  "num-rational",
@@ -1516,8 +1512,7 @@ dependencies = [
 [[package]]
 name = "pallas-crypto"
 version = "1.0.0-alpha.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "208477993383d858172e19fadb2fec1aee44add3bf900fc30a423a0bd9d4e9da"
+source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e403d82a90900591ac26260854ad85b215d7"
 dependencies = [
  "cryptoxide 0.4.4",
  "hex",
@@ -1544,8 +1539,7 @@ dependencies = [
 [[package]]
 name = "pallas-hardano"
 version = "1.0.0-alpha.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26843555b4b5dbb19ee0d0f2d952f283648d460c0eb008d68e164d8483e10705"
+source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e403d82a90900591ac26260854ad85b215d7"
 dependencies = [
  "binary-layout",
  "hex",
@@ -1583,8 +1577,7 @@ dependencies = [
 [[package]]
 name = "pallas-network"
 version = "1.0.0-alpha.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "313717b01632355e94f8be20eed5c7c66c17f0bb713c7dc5bcc908ffaf231aa1"
+source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e403d82a90900591ac26260854ad85b215d7"
 dependencies = [
  "byteorder",
  "hex",
@@ -1617,8 +1610,7 @@ dependencies = [
 [[package]]
 name = "pallas-primitives"
 version = "1.0.0-alpha.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ff6dbd8610190f4f3cfee9def23dde7ad71bdd7fdf82165ebc703dd9ef2342c"
+source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e403d82a90900591ac26260854ad85b215d7"
 dependencies = [
  "hex",
  "pallas-codec 1.0.0-alpha.3",
@@ -1647,8 +1639,7 @@ dependencies = [
 [[package]]
 name = "pallas-traverse"
 version = "1.0.0-alpha.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ceeb9d2d2d20ce6a240c616eb17515addffe435aede6422af72a91232a2274b4"
+source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e403d82a90900591ac26260854ad85b215d7"
 dependencies = [
  "hex",
  "itertools 0.13.0",
@@ -1682,8 +1673,7 @@ dependencies = [
 [[package]]
 name = "pallas-txbuilder"
 version = "1.0.0-alpha.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "015c424818c4766d91c32d64bbeb0ecadbf537d95cc0d5ddf8dfccc919509175"
+source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e403d82a90900591ac26260854ad85b215d7"
 dependencies = [
  "hex",
  "pallas-addresses 1.0.0-alpha.3",
@@ -1714,8 +1704,7 @@ dependencies = [
 [[package]]
 name = "pallas-utxorpc"
 version = "1.0.0-alpha.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "543c903e800f7ddb66a284e4a87f455976fbc0b02fbd83ee5ff3432c2a1035b5"
+source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e403d82a90900591ac26260854ad85b215d7"
 dependencies = [
  "pallas-codec 1.0.0-alpha.3",
  "pallas-crypto 1.0.0-alpha.3",
@@ -1729,8 +1718,7 @@ dependencies = [
 [[package]]
 name = "pallas-validate"
 version = "1.0.0-alpha.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73eb1a15a40f2b5433bb8933a476261ad13beb85161f77752d5382cf70bbb842"
+source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e403d82a90900591ac26260854ad85b215d7"
 dependencies = [
  "chrono",
  "hex",
