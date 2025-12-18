@@ -23,10 +23,14 @@ It is designed to work nicely with Aiken, a language for writing smart contracts
 
 | Crate  | Description    |
 | ------ | -------------- |
-| [`hose-blueprint`](./hose-blueprint) | A proc-macro for generating data types from CIP-57 schemas |
 | [`hose-primitives`](./hose-primitives) | A library providing primitives and protocol parameters of Cardano |
 | [`hose-submission`](./hose-submission) | A library for submitting and evaluating transactions to the Cardano blockchain |
 | [`hose-txbuilder`](./hose-txbuilder) | A library for building and signing transactions in a composable way |
+
+## See also
+
+- [`polymer`](https://github.com/liqwid-labs/polymer) - A library for generating Rust types from a CIP-57 blueprint schema.
+- [`hydrant`](https://github.com/liqwid-labs/hydrant) - Embeddable & extensible chain-indexer for Cardano 
 
 ## Getting Started
 
@@ -41,6 +45,6 @@ Hose provides a semi-opinionated design, with a blessed path to follow, but it i
 The general pattern of usage is as follows:
 
 1. You define your on-chain scripts using Aiken.
-2. You define your types using the `hose-blueprint` crate, loading the plutus.json file that the Aiken compiler generates.
-3. You define your off-chain logic using the `hose-txbuilder` crate.
-4. You define an API for your off-chain logic, and expose it to your frontend. Including submission using the `hose-submission` crate.
+2. You define your types using [`polymer`](https://github.com/liqwid-labs/polymer), loading the plutus.json file that the Aiken compiler generates.
+3. You define your off-chain logic using txbuilder.
+4. You define an API for your off-chain logic, and expose it to your frontend.
