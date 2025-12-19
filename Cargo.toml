@@ -16,7 +16,7 @@ anyhow = "1.0"
 serde = "1.0"
 serde_json = "1.0.145"
 
-hydrant = { path = "../hydrant" }
+hydrant = { git = "https://github.com/liqwid-labs/hydrant" }
 polymer = { git = "https://github.com/liqwid-labs/polymer" }
 pallas = { git = "https://github.com/liqwid-labs/pallas", branch = "txbuilder-pub", features = [
     "unstable",
