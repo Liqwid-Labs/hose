@@ -20,6 +20,7 @@ pub async fn calculate_min_fee(
         * BigRational::from_integer(pparams.min_fee_constant.lovelace.into());
 
     // Fee from scripts
+    // TODO: don't unwrap
     let evaluation = ogmios.evaluate(&built_tx.tx_bytes.0, vec![]).await.unwrap();
     let total_cpu = evaluation
         .iter()
@@ -56,7 +57,7 @@ pub async fn calculate_min_fee(
         let base = pparams.min_fee_reference_scripts.base;
         let multiplier = pparams.min_fee_reference_scripts.multiplier;
         let steps = (total_script_size / range) as i32;
-        let cost_per_step = (range as f64 * base);
+        let cost_per_step = range as f64 * base;
         for i in 0..steps {
             min_fee += BigRational::from_integer(
                 ((cost_per_step * multiplier.powi(i + 1)).floor() as u64).into(),
@@ -66,7 +67,7 @@ pub async fn calculate_min_fee(
         // Partial chunk
         let partial_chunk_bytes = total_script_size % range;
         if partial_chunk_bytes > 0 {
-            let base_cost = (partial_chunk_bytes as f64 * base);
+            let base_cost = partial_chunk_bytes as f64 * base;
             min_fee += BigRational::from_integer(
                 ((base_cost * multiplier.powi(steps + 1)).floor() as u64).into(),
             );

@@ -34,6 +34,22 @@ pub struct Utxo {
     pub datum: Option<String>,
     pub script: Option<Script>,
 }
+impl From<Utxo> for hydrant::primitives::TxOutputPointer {
+    fn from(utxo: Utxo) -> Self {
+        let mut hash = [0u8; 32];
+        hex::decode_to_slice(utxo.transaction.id, &mut hash).unwrap();
+        Self {
+            hash: hash.into(),
+            index: utxo.index as u64,
+        }
+    }
+}
+impl From<Utxo> for pallas::txbuilder::Input {
+    fn from(utxo: Utxo) -> Self {
+        let pointer: hydrant::primitives::TxOutputPointer = utxo.into();
+        pointer.into()
+    }
+}
 
 define_ogmios_error! {
     #[derive(Debug, Clone)]

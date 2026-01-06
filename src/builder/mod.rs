@@ -1,16 +1,19 @@
 //! High-level transaction builder API
 
-use hydrant::primitives::TxHash;
+use anyhow::Context;
+use hydrant::primitives::{TxHash, TxOutputPointer};
 use pallas::crypto::hash::Hash;
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
-use pallas::txbuilder::{BuildConway, BuiltTransaction, StagingTransaction};
+use pallas::txbuilder::{BuildConway, BuiltTransaction, Bytes32, StagingTransaction};
 pub use pallas::txbuilder::{Input, Output};
 
+pub mod coin_selection;
 pub mod fee;
-pub mod selection;
 
-use crate::builder::fee::calculate_min_fee;
+use coin_selection::{get_input_coins, get_output_coins, select_coins};
+use fee::calculate_min_fee;
+
 use crate::ogmios::OgmiosClient;
 use crate::ogmios::pparams::ProtocolParams;
 use crate::wallet::Wallet;
@@ -99,60 +102,80 @@ impl TxBuilder {
         self
     }
 
+    fn all_inputs(&self) -> Vec<TxOutputPointer> {
+        self.body
+            .inputs
+            .iter()
+            .flatten()
+            .chain(self.body.reference_inputs.iter().flatten())
+            .chain(self.body.collateral_inputs.iter().flatten())
+            .cloned()
+            .map(Into::into)
+            .collect::<Vec<_>>()
+    }
+
+    fn requires_collateral(&self) -> bool {
+        // any input comes from a script
+        // any input (including reference) contains a script
+        // any mints
+        // plutus script in witnesses
+        true
+    }
+
+    /// 1. Balance inputs/outputs with fee (estimated on first run, actual on future runs)
+    /// 2. Evaluate transaction and get the actual fee
+    /// 3. Apply fee to the transaction
+    /// 4. Check if balanced (true -> continue, false -> back to step 1, max of X tries)
+    /// 5. BUILD
     pub async fn build(
         self,
         ogmios: &OgmiosClient,
         pparams: &ProtocolParams,
     ) -> anyhow::Result<BuiltTx> {
-        let body = self.body.clone();
-        let fee = calculate_min_fee(&ogmios, &body, pparams).await;
-        let body = body.fee(fee);
-        let change_address = self.change_address.unwrap_or_else(|| {
-            // Get rid of clone
-            let outputs = &body.clone().outputs.unwrap_or_default();
-            let address = outputs.into_iter().last().unwrap().address.clone();
-            address.0
-        });
-        let body = simple_balance_fee(body, change_address, fee)?;
+        let mut body = self.body.clone();
+
+        let change_address = self
+            .change_address
+            .clone()
+            .context("change address not set")?
+            .to_bech32()
+            .context("invalid change address")?;
+
+        // TODO: pick collateral input
+        // TODO: minimum output
+        let address_utxos = ogmios
+            .utxos_by_addresses(&[change_address.as_str()])
+            .await?;
+
+        let mut fee = calculate_min_fee(ogmios, &self.body, pparams).await;
+        loop {
+            let input_coins = get_input_coins(ogmios, &self.all_inputs()).await;
+            let output_coins = get_output_coins(&self.body).await;
+
+            let additional_inputs = select_coins(
+                &address_utxos,
+                &self.all_inputs(),
+                &input_coins,
+                &output_coins,
+                fee,
+            )
+            .await;
+            if additional_inputs.is_empty() {
+                break;
+            }
+            for input in additional_inputs {
+                body = body.input(input.into());
+            }
+
+            fee = calculate_min_fee(ogmios, &body, pparams).await;
+        }
+
         // TODO: handle change address
-        match body.build_conway_raw() {
-            Ok(tx) => Ok(BuiltTx::new(self.body, tx, self.network)),
+        match body.clone().build_conway_raw() {
+            Ok(tx) => Ok(BuiltTx::new(body, tx, self.network)),
             Err(e) => Err(anyhow::anyhow!("Failed to build transaction: {}", e)),
         }
     }
-}
-
-fn simple_balance_fee(
-    tx: StagingTransaction,
-    change_address: Address,
-    fee: u64,
-) -> anyhow::Result<StagingTransaction> {
-    let outputs = tx.outputs.clone().unwrap_or_default();
-    let output_to_pay_fee: Option<usize> =
-        outputs
-            .iter()
-            .enumerate()
-            .find_map(|(i, o)| -> Option<usize> {
-                if o.address.0 == change_address && o.lovelace > fee {
-                    Some(i)
-                } else {
-                    None
-                }
-            });
-
-    let tx = if let Some(index) = output_to_pay_fee {
-        let output = outputs[index].clone();
-        let tx = tx.remove_output(index);
-        let tx = tx.output(Output {
-            lovelace: output.lovelace - fee,
-            ..output
-        });
-        tx
-    } else {
-        tx
-    };
-
-    Ok(tx)
 }
 
 pub struct BuiltTx {
@@ -181,14 +204,11 @@ impl BuiltTx {
     }
 
     pub fn cbor(&self) -> Vec<u8> {
-        let cbor = self.tx.tx_bytes.0.clone();
-        cbor
+        self.tx.tx_bytes.0.clone()
     }
 
     pub fn cbor_hex(&self) -> String {
-        let cbor = self.cbor();
-        let hex = hex::encode(cbor);
-        hex
+        hex::encode(self.cbor())
     }
 
     pub fn hash(&self) -> anyhow::Result<TxHash> {

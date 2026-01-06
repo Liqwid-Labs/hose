@@ -238,6 +238,66 @@ pub struct Balance {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Assets(HashMap<String, HashMap<String, u64>>);
 
+impl Assets {
+    pub fn is_empty(&self) -> bool {
+        self.0
+            .iter()
+            .all(|(_, assets)| assets.iter().all(|(_, amount)| amount == &0))
+    }
+
+    pub fn contained_within(&self, other: &Self) -> bool {
+        self.0.iter().all(|(policy, assets)| {
+            other
+                .0
+                .get(policy)
+                .map(|other_assets| {
+                    assets.iter().all(|(asset, amount)| {
+                        other_assets
+                            .get(asset)
+                            .map(|other_amount| amount <= other_amount)
+                            .unwrap_or(false)
+                    })
+                })
+                .unwrap_or(false)
+        })
+    }
+
+    pub fn saturating_sub(self, other: &Self) -> Self {
+        Self(
+            self.0
+                .iter()
+                .map(|(policy, assets)| {
+                    (
+                        policy.clone(),
+                        assets
+                            .iter()
+                            .map(|(asset, amount)| {
+                                (
+                                    asset.clone(),
+                                    amount.saturating_sub(
+                                        *other
+                                            .get(policy)
+                                            .and_then(|other_assets| other_assets.get(asset))
+                                            .unwrap_or(&0),
+                                    ),
+                                )
+                            })
+                            .collect::<HashMap<_, _>>(),
+                    )
+                })
+                .collect::<HashMap<_, _>>(),
+        )
+    }
+
+    pub fn first_non_zero_asset(&self) -> Option<(String, String, u64)> {
+        self.0.iter().find_map(|(policy, assets)| {
+            assets.iter().find_map(|(asset, amount)| {
+                (*amount > 0).then(|| (policy.clone(), asset.clone(), *amount))
+            })
+        })
+    }
+}
+
 impl Deref for Assets {
     type Target = HashMap<String, HashMap<String, u64>>;
 
