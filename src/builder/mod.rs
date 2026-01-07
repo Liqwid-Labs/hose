@@ -5,15 +5,19 @@ use hydrant::primitives::{TxHash, TxOutputPointer};
 use pallas::crypto::hash::Hash;
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
-use pallas::txbuilder::{BuildConway, BuiltTransaction, Bytes32, StagingTransaction};
-pub use pallas::txbuilder::{Input, Output};
+
+use crate::builder::transaction::build_conway::BuildConway as _;
+use crate::builder::transaction::model::{BuiltTransaction, StagingTransaction};
+pub use crate::builder::transaction::model::{Input, Output};
 
 pub mod coin_selection;
 pub mod fee;
+pub mod transaction;
 
 use coin_selection::{get_input_coins, get_output_coins, select_coins};
 use fee::calculate_min_fee;
 
+use crate::builder::transaction::model::ScriptKind;
 use crate::ogmios::OgmiosClient;
 use crate::ogmios::pparams::ProtocolParams;
 use crate::wallet::Wallet;
@@ -84,7 +88,7 @@ impl TxBuilder {
     }
 
     // Witnesses
-    pub fn add_script(mut self, language: pallas::txbuilder::ScriptKind, bytes: Vec<u8>) -> Self {
+    pub fn add_script(mut self, language: ScriptKind, bytes: Vec<u8>) -> Self {
         self.body = self.body.script(language, bytes);
         self
     }

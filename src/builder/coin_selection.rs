@@ -1,8 +1,8 @@
 use std::cmp::Reverse;
 
 use hydrant::primitives::{TxOutput, TxOutputPointer};
-use pallas::txbuilder::StagingTransaction;
 
+use crate::builder::transaction::model::StagingTransaction;
 use crate::ogmios::OgmiosClient;
 use crate::ogmios::codec::Assets;
 use crate::ogmios::utxo::Utxo;

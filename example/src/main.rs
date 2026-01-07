@@ -12,11 +12,10 @@ use hydrant::UtxoIndexer;
 use pallas::crypto::hash::Hash;
 use pallas::ledger::addresses::{Address, Network, ShelleyAddress};
 use pallas::ledger::primitives::NetworkId;
-use pallas::txbuilder::BuiltTransaction;
 use tokio::signal;
-use tracing::instrument::WithSubscriber;
-use tracing::{Level, error, info};
+use tracing::{error, info};
 use url::Url;
+
 pub mod config;
 
 #[tokio::main]
@@ -39,7 +38,7 @@ pub async fn main() -> anyhow::Result<()> {
 
     info!("Wallet address: {}", wallet.address().to_bech32()?);
 
-    let indexer = start_indexer(&config, wallet.address().clone())?;
+    // let indexer = start_indexer(&config, wallet.address().clone())?;
 
     info!("Indexer started");
 
@@ -72,7 +71,9 @@ async fn create_collateral_tx(
     let utxo = utxos.first().context("no utxo found")?;
     let input = input_from_utxo(utxo.clone())?;
     let collateral_size = 10_000_000;
+    let change_address = wallet.address().clone();
     let tx = TxBuilder::new(network_id)
+        .change_address(Address::Shelley(change_address))
         .add_input(input)
         .add_output(Output::new(
             Address::Shelley(wallet.address().clone()),

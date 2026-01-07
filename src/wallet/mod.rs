@@ -1,8 +1,9 @@
 use pallas::crypto::key::ed25519::{self, TryFromSecretKeyExtendedError};
 use pallas::ledger::addresses::{Network, ShelleyAddress};
 use pallas::ledger::primitives::{Fragment as _, conway};
-use pallas::txbuilder::{BuiltTransaction, TxBuilderError};
 use thiserror::Error;
+
+use crate::builder::transaction::model::BuiltTransaction;
 
 mod builder;
 mod hd_key;

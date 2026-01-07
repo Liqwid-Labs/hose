@@ -47,7 +47,14 @@ impl From<Utxo> for hydrant::primitives::TxOutputPointer {
 impl From<Utxo> for pallas::txbuilder::Input {
     fn from(utxo: Utxo) -> Self {
         let pointer: hydrant::primitives::TxOutputPointer = utxo.into();
-        pointer.into()
+        pallas::txbuilder::Input::new(pointer.hash.0.into(), pointer.index as u64)
+    }
+}
+
+impl From<Utxo> for crate::builder::transaction::model::Input {
+    fn from(utxo: Utxo) -> Self {
+        let pointer: hydrant::primitives::TxOutputPointer = utxo.into();
+        crate::builder::transaction::model::Input::new(pointer.hash.0.into(), pointer.index as u64)
     }
 }
 

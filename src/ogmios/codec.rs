@@ -320,8 +320,8 @@ impl Sum for Assets {
     }
 }
 
-impl From<&pallas::txbuilder::OutputAssets> for Assets {
-    fn from(map: &pallas::txbuilder::OutputAssets) -> Self {
+impl From<&crate::builder::transaction::model::OutputAssets> for Assets {
+    fn from(map: &crate::builder::transaction::model::OutputAssets) -> Self {
         Self(
             map.iter()
                 .map(|(policy_id, asset_map)| {
