@@ -1,7 +1,8 @@
 use hydrant::primitives::TxOutputPointer;
 use num::{BigRational, FromPrimitive as _, ToPrimitive as _};
-use pallas::txbuilder::{BuildConway, StagingTransaction};
 
+use crate::builder::transaction::build_conway::BuildConway as _;
+use crate::builder::transaction::model::StagingTransaction;
 use crate::ogmios::OgmiosClient;
 use crate::ogmios::pparams::ProtocolParams;
 

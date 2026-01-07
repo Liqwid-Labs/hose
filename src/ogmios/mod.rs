@@ -1,6 +1,9 @@
-use reqwest::{Response, Url};
+use std::fmt;
+
+use anyhow::Context;
+use reqwest::Url;
+use serde::Serialize;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
 
 pub mod codec;
 pub mod evaluate;
@@ -31,22 +34,47 @@ impl OgmiosClient {
         }
     }
 
-    async fn request<T: Serialize, U: DeserializeOwned, E: DeserializeOwned>(
+    async fn request<
+        T: Serialize + Clone + fmt::Debug,
+        U: DeserializeOwned,
+        E: DeserializeOwned,
+    >(
         &self,
         method: &str,
         params: Option<T>,
-    ) -> Result<RpcResponse<U, E>, reqwest::Error> {
+    ) -> anyhow::Result<RpcResponse<U, E>> {
         let res = self
             .client
             .post(self.url.clone())
             .json(&RpcRequest {
                 jsonrpc: "2.0".to_string(),
                 method: method.to_string(),
-                params,
+                params: params.clone(),
             })
             .send()
-            .await?;
-        res.json().await
+            .await
+            .with_context(|| format!("Failed to send request for method '{}'", method))?;
+
+        let status = res.status();
+        let response_text = res
+            .text()
+            .await
+            .with_context(|| format!("Failed to read response body for method '{}'", method))?;
+
+        serde_json::from_str(&response_text).with_context(|| {
+            format!(
+                "Failed to deserialize JSON response for method '{}'\n- Response status: {}\n- Response body:\n{}\n- Request body:\n{}",
+                method,
+                status,
+                response_text,
+                serde_json::to_string_pretty(&RpcRequest {
+                    jsonrpc: "2.0".to_string(),
+                    method: method.to_string(),
+                    params: params,
+                })
+                .unwrap()
+            )
+        })
     }
 
     pub async fn evaluate(

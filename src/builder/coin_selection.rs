@@ -1,8 +1,10 @@
 use std::cmp::Reverse;
 
 use hydrant::primitives::{TxOutput, TxOutputPointer};
-use pallas::txbuilder::StagingTransaction;
+use pallas::ledger::addresses::Address as PallasAddress;
 
+use crate::builder::Output;
+use crate::builder::transaction::model::{Address, StagingTransaction};
 use crate::ogmios::OgmiosClient;
 use crate::ogmios::codec::Assets;
 use crate::ogmios::utxo::Utxo;
@@ -133,5 +135,31 @@ pub async fn select_coins(
         "failed to select coins, wallet doesn't contain enough funds"
     );
 
-    vec![]
+    selected_utxos
+        .into_iter()
+        .map(|utxo| utxo.clone())
+        .collect()
+}
+
+/// Create change output if needed because transaction is not balanced.
+pub fn handle_change(
+    change_address: &PallasAddress,
+    input_coins: &Coins,
+    output_coins: &Coins,
+    fee: u64,
+) -> Vec<Output> {
+    let change = input_coins
+        .clone()
+        .saturating_sub(output_coins.clone())
+        .saturating_sub(Coins {
+            lovelace: fee,
+            assets: Assets::default(),
+        });
+    if change.lovelace > 0 || !change.assets.is_empty() {
+        let change_output =
+            Output::new(change_address.clone(), change.lovelace).add_assets(change.assets.into());
+        vec![change_output.expect("failed to create change output")]
+    } else {
+        vec![]
+    }
 }
