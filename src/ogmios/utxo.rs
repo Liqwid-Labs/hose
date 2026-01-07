@@ -10,6 +10,8 @@ use crate::define_ogmios_error;
 #[serde(rename_all = "camelCase")]
 pub enum UtxoRequestParams {
     ByOutputReference {
+        // For some reason rename_all doesn't work for this field.
+        #[serde(rename = "outputReferences")]
         output_references: Vec<TxOutputPointer>,
     },
     ByAddress {

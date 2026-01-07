@@ -74,11 +74,6 @@ async fn create_collateral_tx(
     let change_address = wallet.address().clone();
     let tx = TxBuilder::new(network_id)
         .change_address(Address::Shelley(change_address))
-        .add_input(input)
-        .add_output(Output::new(
-            Address::Shelley(wallet.address().clone()),
-            utxo.value.lovelace - collateral_size,
-        ))
         .add_output(Output::new(
             Address::Shelley(wallet.address().clone()),
             collateral_size,

@@ -3,15 +3,20 @@ use std::iter::Sum;
 use std::ops::Deref;
 use std::str::FromStr as _;
 
+use bip32::secp256k1::sha2::digest::Output;
 use hydrant::primitives::Policy;
 use num::BigRational;
 use serde::de::Unexpected;
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::builder::transaction::model::OutputAssets;
+use crate::builder::transaction::{AssetName, Bytes, Hash28, PolicyId};
+
 #[derive(Debug, Clone, Serialize)]
 pub struct RpcRequest<T: Serialize> {
     pub jsonrpc: String,
     pub method: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub params: Option<T>,
 }
 
@@ -237,6 +242,27 @@ pub struct Balance {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Assets(HashMap<String, HashMap<String, u64>>);
+
+impl Into<OutputAssets> for Assets {
+    fn into(self) -> OutputAssets {
+        OutputAssets::from_map(
+            self.0
+                .into_iter()
+                .map(|(policy, assets)| {
+                    let policy = hex::decode(policy).unwrap();
+                    let policy = Hash28(policy.try_into().unwrap());
+                    (
+                        PolicyId::from(policy),
+                        assets
+                            .into_iter()
+                            .map(|(asset, amount)| (Bytes(hex::decode(asset).unwrap()), amount))
+                            .collect::<HashMap<_, _>>(),
+                    )
+                })
+                .collect::<HashMap<_, _>>(),
+        )
+    }
+}
 
 impl Assets {
     pub fn is_empty(&self) -> bool {

@@ -5,7 +5,9 @@ use hydrant::primitives::{TxHash, TxOutputPointer};
 use pallas::crypto::hash::Hash;
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
+use pallas::network::miniprotocols::localstate::queries_v16::NextEpochChange;
 
+use crate::builder::coin_selection::handle_change;
 use crate::builder::transaction::build_conway::BuildConway as _;
 use crate::builder::transaction::model::{BuiltTransaction, StagingTransaction};
 pub use crate::builder::transaction::model::{Input, Output};
@@ -132,7 +134,7 @@ impl TxBuilder {
     /// 4. Check if balanced (true -> continue, false -> back to step 1, max of X tries)
     /// 5. BUILD
     pub async fn build(
-        self,
+        mut self,
         ogmios: &OgmiosClient,
         pparams: &ProtocolParams,
     ) -> anyhow::Result<BuiltTx> {
@@ -168,15 +170,29 @@ impl TxBuilder {
                 break;
             }
             for input in additional_inputs {
-                body = body.input(input.into());
+                self.body = self.body.input(input.into());
             }
 
-            fee = calculate_min_fee(ogmios, &body, pparams).await;
+            fee = calculate_min_fee(ogmios, &self.body, pparams).await;
+            self.body.fee = Some(fee);
+        }
+
+        let input_coins = get_input_coins(ogmios, &self.all_inputs()).await;
+        let output_coins = get_output_coins(&self.body).await;
+
+        let change = handle_change(
+            self.change_address.as_ref().unwrap(),
+            &input_coins,
+            &output_coins,
+            fee,
+        );
+        for output in change {
+            self.body = self.body.output(output);
         }
 
         // TODO: handle change address
-        match body.clone().build_conway_raw() {
-            Ok(tx) => Ok(BuiltTx::new(body, tx, self.network)),
+        match self.body.clone().build_conway_raw() {
+            Ok(tx) => Ok(BuiltTx::new(self.body, tx, self.network)),
             Err(e) => Err(anyhow::anyhow!("Failed to build transaction: {}", e)),
         }
     }

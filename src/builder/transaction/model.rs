@@ -465,6 +465,15 @@ impl Output {
         Ok(self)
     }
 
+    pub fn add_assets(mut self, assets: OutputAssets) -> Result<Self, TxBuilderError> {
+        for (policy, asset_map) in assets.0.iter() {
+            for (asset, amount) in asset_map.iter() {
+                self = self.add_asset(Hash::from(policy.0), asset.0.clone(), *amount)?;
+            }
+        }
+        Ok(self)
+    }
+
     pub fn set_inline_datum(mut self, plutus_data: Vec<u8>) -> Self {
         self.datum = Some(Datum {
             kind: DatumKind::Inline,
