@@ -10,22 +10,14 @@ use pallas::ledger::primitives::conway::{
 use pallas::ledger::primitives::{Fragment, KeepRaw, NonEmptySet, PositiveCoin};
 use pallas::ledger::traverse::ComputeHash;
 
+use super::model::{Bytes, Hash as HydrantHash};
 use crate::builder::transaction::error::TxBuilderError;
 use crate::builder::transaction::model::{
-    BuilderEra, BuiltTransaction, DatumKind, ExUnits, Output, RedeemerPurpose, ScriptKind,
-    StagingTransaction,
+    BuiltTransaction, DatumKind, ExUnits, Output, RedeemerPurpose, ScriptKind, StagingTransaction,
 };
-use crate::builder::transaction::{Bytes, Bytes32, TransactionStatus};
 
-pub trait BuildConway {
-    fn build_conway_raw(self) -> Result<BuiltTransaction, TxBuilderError>;
-
-    // fn build_babbage(staging_tx: StagingTransaction, resolver: (), params: ()) ->
-    // Result<BuiltTransaction, TxBuilderError>;
-}
-
-impl BuildConway for StagingTransaction {
-    fn build_conway_raw(self) -> Result<BuiltTransaction, TxBuilderError> {
+impl StagingTransaction {
+    pub fn build_conway(self) -> Result<BuiltTransaction, TxBuilderError> {
         let mut inputs = self
             .inputs
             .unwrap_or_default()
@@ -41,7 +33,7 @@ impl BuildConway for StagingTransaction {
         let outputs = self.outputs.unwrap_or_default();
         let outputs = outputs
             .iter()
-            .map(Output::build_babbage_raw)
+            .map(Output::build_babbage)
             .collect::<Result<Vec<_>, _>>()?;
 
         let mint: Vec<(
@@ -99,7 +91,7 @@ impl BuildConway for StagingTransaction {
         let collateral_return = self
             .collateral_output
             .as_ref()
-            .map(Output::build_babbage_raw)
+            .map(Output::build_babbage)
             .transpose()?;
 
         let reference_inputs = NonEmptySet::from_vec(
@@ -285,22 +277,15 @@ impl BuildConway for StagingTransaction {
             .into();
 
         Ok(BuiltTransaction {
-            version: self.version,
-            era: BuilderEra::Conway,
-            status: TransactionStatus::Built,
-            tx_hash: Bytes32(*pallas_tx.transaction_body.compute_hash()),
+            tx_hash: HydrantHash(*pallas_tx.transaction_body.compute_hash()),
             tx_bytes: Bytes(pallas_tx.encode_fragment().unwrap()),
             signatures: None,
         })
     }
-
-    // fn build_babbage(staging_tx: StagingTransaction) -> Result<BuiltTransaction,
-    // TxBuilderError> {     todo!()
-    // }
 }
 
 impl Output {
-    pub fn build_babbage_raw(&self) -> Result<TransactionOutput<'_>, TxBuilderError> {
+    pub fn build_babbage(&self) -> Result<TransactionOutput<'_>, TxBuilderError> {
         let assets = self
             .assets
             .iter()

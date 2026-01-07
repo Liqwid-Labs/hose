@@ -1,7 +1,6 @@
 use hydrant::primitives::TxOutputPointer;
-use num::{BigRational, FromPrimitive as _, ToPrimitive as _};
+use num::{BigRational, ToPrimitive};
 
-use crate::builder::transaction::build_conway::BuildConway as _;
 use crate::builder::transaction::model::StagingTransaction;
 use crate::ogmios::OgmiosClient;
 use crate::ogmios::pparams::ProtocolParams;
@@ -12,7 +11,7 @@ pub async fn calculate_min_fee(
     tx: &StagingTransaction,
     pparams: &ProtocolParams,
 ) -> u64 {
-    let built_tx = tx.clone().build_conway_raw().unwrap();
+    let built_tx = tx.clone().build_conway().unwrap();
 
     // Base fee + fee from size
     let mut min_fee = BigRational::from_integer(pparams.min_fee_constant.lovelace.into());
@@ -39,7 +38,7 @@ pub async fn calculate_min_fee(
     if let Some(reference_inputs) = tx.reference_inputs.as_ref() {
         let reference_inputs = reference_inputs
             .iter()
-            .map(|input| TxOutputPointer::new(input.tx_hash.0.into(), input.txo_index as usize))
+            .map(|input| TxOutputPointer::new(input.tx_hash.0.into(), input.txo_index))
             .map(Into::into)
             .collect::<Vec<_>>();
 

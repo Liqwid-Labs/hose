@@ -1,15 +1,15 @@
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
-use anyhow::{Context as _, Result};
-use clap::Parser as _;
+use anyhow::{Context, Result};
+use clap::Parser;
 use hose::builder::{BuiltTx, Input, Output, TxBuilder};
 use hose::ogmios::OgmiosClient;
 use hose::ogmios::pparams::ProtocolParams;
 use hose::ogmios::utxo::Utxo;
 use hose::wallet::{Wallet, WalletBuilder};
 use hydrant::UtxoIndexer;
-use pallas::crypto::hash::Hash;
+use hydrant::primitives::Hash;
 use pallas::ledger::addresses::{Address, Network, ShelleyAddress};
 use pallas::ledger::primitives::NetworkId;
 use tokio::signal;
@@ -33,8 +33,7 @@ pub async fn main() -> anyhow::Result<()> {
 
     info!("Protocol params: {:?}", protocol_params);
 
-    let wallet =
-        WalletBuilder::new(config.network.clone()).from_hex(config.private_key_hex.clone())?;
+    let wallet = WalletBuilder::new(config.network).from_hex(config.private_key_hex.clone())?;
 
     info!("Wallet address: {}", wallet.address().to_bech32()?);
 

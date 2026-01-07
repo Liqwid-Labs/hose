@@ -28,6 +28,9 @@ pub struct ProtocolParams {
     pub min_utxo_deposit_coefficient: u64,
     /// Price per unit of CPU and memory
     pub script_execution_prices: ExecutionUnits,
+
+    /// Percentage of the transaction fee that must be provided as collateral
+    pub collateral_percentage: f64,
 }
 
 /// Multiplied by the size of the reference script

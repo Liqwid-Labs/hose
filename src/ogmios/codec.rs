@@ -3,14 +3,10 @@ use std::iter::Sum;
 use std::ops::Deref;
 use std::str::FromStr as _;
 
-use bip32::secp256k1::sha2::digest::Output;
-use hydrant::primitives::Policy;
 use num::BigRational;
-use serde::de::Unexpected;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::builder::transaction::model::OutputAssets;
-use crate::builder::transaction::{AssetName, Bytes, Hash28, PolicyId};
+use crate::builder::transaction::model::{Bytes, Hash, OutputAssets, PolicyId};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RpcRequest<T: Serialize> {
@@ -70,6 +66,16 @@ pub struct TxOutputPointer {
 
 impl From<hydrant::primitives::TxOutputPointer> for TxOutputPointer {
     fn from(ptr: hydrant::primitives::TxOutputPointer) -> Self {
+        Self {
+            transaction: TxPointer {
+                id: hex::encode(*ptr.hash),
+            },
+            index: ptr.index as u32,
+        }
+    }
+}
+impl From<&hydrant::primitives::TxOutputPointer> for TxOutputPointer {
+    fn from(ptr: &hydrant::primitives::TxOutputPointer) -> Self {
         Self {
             transaction: TxPointer {
                 id: hex::encode(*ptr.hash),
@@ -250,7 +256,7 @@ impl Into<OutputAssets> for Assets {
                 .into_iter()
                 .map(|(policy, assets)| {
                     let policy = hex::decode(policy).unwrap();
-                    let policy = Hash28(policy.try_into().unwrap());
+                    let policy = Hash(policy.try_into().unwrap());
                     (
                         PolicyId::from(policy),
                         assets
