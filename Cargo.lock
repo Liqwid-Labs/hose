@@ -825,7 +825,7 @@ dependencies = [
  "cryptoxide 0.5.1",
  "ed25519-bip32",
  "hex",
- "hydrant",
+ "hydrant 0.1.0 (git+https://github.com/liqwid-labs/hydrant)",
  "minicbor 2.1.3",
  "num",
  "num-bigint",
@@ -849,7 +849,7 @@ dependencies = [
  "clap",
  "dotenv",
  "hose",
- "hydrant",
+ "hydrant 0.1.0",
  "pallas 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
  "tokio",
  "tracing",
@@ -899,6 +899,24 @@ checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
 [[package]]
 name = "hydrant"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "heed",
+ "hex",
+ "minicbor 2.1.3",
+ "page_size",
+ "pallas 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "rkyv",
+ "serde",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "hydrant"
+version = "0.1.0"
+source = "git+https://github.com/liqwid-labs/hydrant#9cebec62d57c4759bec64612f4a9933a5ca902ee"
 dependencies = [
  "anyhow",
  "heed",
