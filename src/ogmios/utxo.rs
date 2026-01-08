@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::codec::{Balance, Era, TxPointer};
+use super::codec::{Balance, Era, TxOutputPointer, TxPointer};
 use super::script::Script;
 use super::*;
 use crate::define_ogmios_error;
@@ -44,19 +44,6 @@ impl From<Utxo> for hydrant::primitives::TxOutputPointer {
             hash: hash.into(),
             index: utxo.index as u64,
         }
-    }
-}
-impl From<Utxo> for pallas::txbuilder::Input {
-    fn from(utxo: Utxo) -> Self {
-        let pointer: hydrant::primitives::TxOutputPointer = utxo.into();
-        pallas::txbuilder::Input::new(pointer.hash.0.into(), pointer.index as u64)
-    }
-}
-
-impl From<Utxo> for crate::builder::transaction::model::Input {
-    fn from(utxo: Utxo) -> Self {
-        let pointer: hydrant::primitives::TxOutputPointer = utxo.into();
-        crate::builder::transaction::model::Input::new(pointer.hash.0.into(), pointer.index as u64)
     }
 }
 

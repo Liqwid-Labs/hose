@@ -28,9 +28,9 @@ pub struct SubmitRequestParams {
 
 #[derive(Debug, Clone, Deserialize)]
 #[doc = "hi"]
-struct MetadataHash {
+pub struct MetadataHash {
     /// Hex-encoded 32-byte blake2b hash digest
-    hash: String,
+    pub hash: String,
 }
 
 define_ogmios_error! {

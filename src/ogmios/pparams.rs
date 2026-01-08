@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::codec::AdaBalance;
-use crate::ogmios::codec::ExecutionUnits;
+use crate::define_ogmios_error;
+use crate::ogmios::codec::{Era, ExecutionUnits};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,6 +29,9 @@ pub struct ProtocolParams {
     pub min_utxo_deposit_coefficient: u64,
     /// Price per unit of CPU and memory
     pub script_execution_prices: ExecutionUnits,
+
+    /// Percentage of the transaction fee that must be provided as collateral
+    pub collateral_percentage: f64,
 }
 
 /// Multiplied by the size of the reference script
@@ -50,4 +54,17 @@ pub struct MinFeeReferenceScripts {
     /// Cost per byte, multiplied by `multiplier ^ range_index`
     pub base: f64,
     pub multiplier: f64,
+}
+
+define_ogmios_error! {
+    #[derive(Debug, Clone)]
+    pub enum ProtocolParamsError {
+        2001 => EraMismatch {
+            query_era: Era,
+            ledger_era: Era,
+        },
+        2002 => UnavailableInCurrentEra,
+        2003 => StateAcquiredExpired(String)
+        _ => Unknown { error: Value }
+    }
 }

@@ -1,165 +1,119 @@
 use std::cmp::Reverse;
 
-use hydrant::primitives::{TxOutput, TxOutputPointer};
+use hydrant::UtxoIndexer;
+use hydrant::primitives::{AssetsDelta, TxOutput};
 use pallas::ledger::addresses::Address as PallasAddress;
 
-use crate::builder::Output;
-use crate::builder::transaction::model::{Address, StagingTransaction};
-use crate::ogmios::OgmiosClient;
-use crate::ogmios::codec::Assets;
-use crate::ogmios::utxo::Utxo;
+use crate::builder::{Output, StagingTransaction};
+use crate::ogmios::pparams::ProtocolParams;
+use crate::primitives::Assets;
 
-#[derive(Debug, Default, Clone)]
-pub struct Coins {
-    pub lovelace: u64,
-    pub assets: Assets,
-}
-
-impl Coins {
-    pub fn contained_within(&self, other: &Self) -> bool {
-        self.lovelace <= other.lovelace && self.assets.contained_within(&other.assets)
-    }
-
-    pub fn saturating_sub(self, other: Self) -> Self {
-        Self {
-            lovelace: self.lovelace.saturating_sub(other.lovelace),
-            assets: self.assets.saturating_sub(&other.assets),
-        }
-    }
-}
-
-impl From<Utxo> for Coins {
-    fn from(utxo: Utxo) -> Self {
-        Self {
-            lovelace: utxo.value.lovelace,
-            assets: utxo.value.assets,
-        }
-    }
-}
-
-pub async fn get_input_coins(ogmios: &OgmiosClient, inputs: &[TxOutputPointer]) -> Coins {
-    let output_pointers = inputs
+pub fn get_input_lovelace(indexer: &UtxoIndexer, tx: &StagingTransaction) -> anyhow::Result<u64> {
+    Ok(indexer
+        .utxos(&tx.inputs)?
         .iter()
-        .map(|input| input.clone().into())
-        .collect::<Vec<_>>();
-    let utxos = ogmios.utxos_by_output(&output_pointers).await.unwrap();
-
-    let lovelace = utxos.iter().map(|utxo| utxo.value.lovelace).sum::<u64>();
-    let assets = utxos.into_iter().map(|utxo| utxo.value.assets).sum();
-    Coins { lovelace, assets }
+        .map(|utxo| utxo.lovelace)
+        .sum())
 }
 
-pub async fn get_output_coins(tx: &StagingTransaction) -> Coins {
-    let Some(outputs) = tx.outputs.as_ref() else {
-        return Coins::default();
-    };
-
-    let lovelace = outputs.iter().map(|output| output.lovelace).sum::<u64>();
-    let assets = outputs
+pub fn get_input_assets(indexer: &UtxoIndexer, tx: &StagingTransaction) -> anyhow::Result<Assets> {
+    Ok(indexer
+        .utxos(&tx.inputs)?
         .iter()
-        .flat_map(|output| output.assets.as_ref())
-        .map(|assets| -> Assets { assets.into() })
-        .sum::<Assets>();
-    Coins { lovelace, assets }
+        .map(|utxo| utxo.assets.clone())
+        .sum())
+}
+
+pub fn get_output_lovelace(tx: &StagingTransaction) -> u64 {
+    tx.outputs.iter().map(|output| output.lovelace).sum()
+}
+
+pub fn get_output_assets(tx: &StagingTransaction) -> Assets {
+    tx.outputs
+        .iter()
+        .flat_map(|output| output.assets.clone())
+        .sum()
 }
 
 pub async fn select_coins(
-    possible_utxos: &[Utxo],
-    inputs: &[TxOutputPointer],
-    input_coins: &Coins,
-    output_coins: &Coins,
+    pparams: &ProtocolParams,
+    possible_utxos: &[TxOutput],
+    tx: &StagingTransaction,
     fee: u64,
-) -> Vec<Utxo> {
+) -> Vec<TxOutput> {
+    let mut selected_utxos = vec![];
+
     // Filter utxos already used as inputs
     // TODO: should also filter out utxos with scripts? utxos with datums?
     let mut possible_utxos = possible_utxos
-        .into_iter()
-        .filter(|utxo| {
-            inputs.iter().all(|input| {
-                hex::encode(*input.hash) != utxo.transaction.id
-                    && input.index != (utxo.index as u64)
-            })
-        })
+        .iter()
+        .filter(|utxo| tx.inputs.iter().all(|input| input == *utxo))
         .collect::<Vec<_>>();
-    possible_utxos.sort_by_key(|utxo| Reverse(utxo.value.lovelace)); // Largest-first
 
-    let mut selected_utxos = vec![];
-    let mut required_coins = Coins {
-        lovelace: output_coins.lovelace + fee,
-        assets: output_coins.assets.clone(),
-    };
-    required_coins = required_coins.saturating_sub(input_coins.clone());
+    // TODO: consider minted assets
 
-    // Select for lovelace
-    while required_coins.lovelace > 0 && possible_utxos.len() > 0 {
-        let utxo = possible_utxos.remove(0);
-        required_coins = required_coins.saturating_sub(utxo.clone().into());
-        selected_utxos.push(utxo);
-    }
+    // assume a change output of maximum 500 bytes
+    // TODO: technically we should use the actual size of the change output
+    let min_change_lovelace = pparams.min_utxo_deposit_coefficient * 500;
+    let mut required_lovelace = get_output_lovelace(tx) + fee + min_change_lovelace;
+    let mut required_assets: AssetsDelta = get_output_assets(tx).into();
 
     // Select for assets
-    while possible_utxos.len() > 0
-        && let Some(required_asset) = required_coins.assets.first_non_zero_asset()
+    while !possible_utxos.is_empty()
+        && let Some(asset) = required_assets.only_positive().keys().next()
     {
         // Largest-first but now by asset amount
-        possible_utxos.sort_by_key(|utxo| {
-            Reverse(
-                *utxo
-                    .value
-                    .assets
-                    .get(&required_asset.0)
-                    .and_then(|assets| assets.get(&required_asset.1))
-                    .unwrap_or(&0),
-            )
-        });
+        possible_utxos.sort_by_key(|utxo| Reverse(*utxo.assets.get(asset).unwrap_or(&0)));
 
         let utxo = possible_utxos.remove(0);
-        if utxo
-            .value
-            .assets
-            .get(&required_asset.0)
-            .and_then(|assets| assets.get(&required_asset.1))
-            .unwrap_or(&0)
-            == &0
-        {
+        if utxo.assets.get(asset).unwrap_or(&0) == &0 {
             break;
         }
 
-        required_coins = required_coins.saturating_sub(utxo.clone().into());
-        selected_utxos.push(utxo);
+        required_assets = required_assets - utxo.assets.clone().into();
+        selected_utxos.push(utxo.clone());
+    }
+
+    // Select for lovelace
+    possible_utxos.sort_by_key(|utxo| Reverse(utxo.lovelace)); // Largest-first
+    while !possible_utxos.is_empty() && required_lovelace > 0 {
+        let utxo = possible_utxos.remove(0);
+        required_lovelace = required_lovelace.saturating_sub(utxo.lovelace);
+        selected_utxos.push(utxo.clone());
     }
 
     // TODO: give a proper error
     assert!(
-        required_coins.lovelace == 0 && required_coins.assets.is_empty(),
+        required_lovelace == 0 && required_assets.only_positive().is_empty(),
         "failed to select coins, wallet doesn't contain enough funds"
     );
 
     selected_utxos
-        .into_iter()
-        .map(|utxo| utxo.clone())
-        .collect()
 }
 
 /// Create change output if needed because transaction is not balanced.
 pub fn handle_change(
+    indexer: &UtxoIndexer,
     change_address: &PallasAddress,
-    input_coins: &Coins,
-    output_coins: &Coins,
+    tx: &StagingTransaction,
     fee: u64,
-) -> Vec<Output> {
-    let change = input_coins
-        .clone()
-        .saturating_sub(output_coins.clone())
-        .saturating_sub(Coins {
-            lovelace: fee,
-            assets: Assets::default(),
-        });
-    if change.lovelace > 0 || !change.assets.is_empty() {
-        let change_output =
-            Output::new(change_address.clone(), change.lovelace).add_assets(change.assets.into());
-        vec![change_output.expect("failed to create change output")]
-    } else {
-        vec![]
+) -> anyhow::Result<Option<Output>> {
+    // TODO: consider minted assets
+    let input_lovelace = get_input_lovelace(indexer, tx)?;
+    let output_lovelace = get_output_lovelace(tx);
+    let change_lovelace = input_lovelace
+        .saturating_sub(output_lovelace)
+        .saturating_sub(fee);
+
+    let input_assets: AssetsDelta = get_input_assets(indexer, tx)?.into();
+    let output_assets: AssetsDelta = get_output_assets(tx).into();
+    let change_assets = input_assets - output_assets;
+
+    if change_lovelace == 0 && change_assets.only_positive().is_empty() {
+        return Ok(None);
     }
+
+    let change_output =
+        Output::new(change_address.clone(), change_lovelace).add_assets(change_assets.into());
+    Ok(Some(change_output.expect("failed to create change output")))
 }
