@@ -6,9 +6,6 @@ pub enum TxBuilderError {
     /// Provided bytes could not be decoded into a datum
     #[error("Could not decode datum bytes")]
     MalformedDatum,
-    /// Provided datum hash was not 32 bytes in length
-    #[error("Invalid bytes length for datum hash")]
-    MalformedDatumHash,
     /// Input, policy, etc pointed to by a redeemer was not found in the
     /// transaction
     #[error("Input/policy pointed to by redeemer not found in tx")]

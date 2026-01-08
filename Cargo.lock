@@ -825,12 +825,12 @@ dependencies = [
  "cryptoxide 0.5.1",
  "ed25519-bip32",
  "hex",
- "hydrant 0.1.0 (git+https://github.com/liqwid-labs/hydrant)",
+ "hydrant",
  "minicbor 2.1.3",
  "num",
  "num-bigint",
  "num-rational",
- "pallas 1.0.0-alpha.3",
+ "pallas 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
  "polymer",
  "reqwest",
  "serde",
@@ -849,8 +849,8 @@ dependencies = [
  "clap",
  "dotenv",
  "hose",
- "hydrant 0.1.0",
- "pallas 1.0.0-alpha.3",
+ "hydrant",
+ "pallas 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -905,25 +905,9 @@ dependencies = [
  "hex",
  "minicbor 2.1.3",
  "page_size",
- "pallas 1.0.0-alpha.3",
+ "pallas 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
  "rkyv",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "hydrant"
-version = "0.1.0"
-source = "git+https://github.com/liqwid-labs/hydrant#d0f11994bfc5e93072ae5591f0aa342ae3acef6f"
-dependencies = [
- "anyhow",
- "heed",
- "hex",
- "minicbor 2.1.3",
- "page_size",
- "pallas 1.0.0-alpha.3",
- "rkyv",
+ "serde",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -1119,9 +1103,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.12.1"
+version = "2.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ad4bb2b565bca0645f4d68c5c9af97fba094e9791da685bf83cb5f3ce74acf2"
+checksum = "7714e70437a7dc3ac8eb7e6f8df75fd8eb422675fc7678aff7364301092b1017"
 dependencies = [
  "equivalent",
  "hashbrown 0.16.1",
@@ -1205,9 +1189,9 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libc"
-version = "0.2.179"
+version = "0.2.180"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5a2d376baa530d1238d133232d15e239abad80d05838b4b59354e5268af431f"
+checksum = "bcc35a38544a891a5f7c865aca548a982ccb3b8650a5b06d0fd33a10283c56fc"
 
 [[package]]
 name = "linux-raw-sys"
@@ -1473,17 +1457,34 @@ name = "pallas"
 version = "1.0.0-alpha.3"
 source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e403d82a90900591ac26260854ad85b215d7"
 dependencies = [
- "pallas-addresses 1.0.0-alpha.3",
- "pallas-codec 1.0.0-alpha.3",
- "pallas-configs 1.0.0-alpha.3",
- "pallas-crypto 1.0.0-alpha.3",
+ "pallas-addresses 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-configs 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
  "pallas-hardano 1.0.0-alpha.3",
- "pallas-network 1.0.0-alpha.3",
- "pallas-primitives 1.0.0-alpha.3",
- "pallas-traverse 1.0.0-alpha.3",
- "pallas-txbuilder 1.0.0-alpha.3",
- "pallas-utxorpc 1.0.0-alpha.3",
- "pallas-validate",
+ "pallas-network 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-primitives 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-traverse 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-txbuilder 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-utxorpc 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-validate 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+]
+
+[[package]]
+name = "pallas"
+version = "1.0.0-alpha.3"
+source = "git+https://github.com/txpipe/pallas#7c3bde8b257614267d18cc138f31bc44395b0962"
+dependencies = [
+ "pallas-addresses 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-configs 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-network 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-primitives 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-traverse 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-txbuilder 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-utxorpc 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-validate 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
 ]
 
 [[package]]
@@ -1512,8 +1513,23 @@ dependencies = [
  "crc",
  "cryptoxide 0.4.4",
  "hex",
- "pallas-codec 1.0.0-alpha.3",
- "pallas-crypto 1.0.0-alpha.3",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "pallas-addresses"
+version = "1.0.0-alpha.3"
+source = "git+https://github.com/txpipe/pallas#7c3bde8b257614267d18cc138f31bc44395b0962"
+dependencies = [
+ "base58",
+ "bech32 0.9.1",
+ "crc",
+ "cryptoxide 0.4.4",
+ "hex",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
  "thiserror 1.0.69",
 ]
 
@@ -1557,6 +1573,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallas-codec"
+version = "1.0.0-alpha.3"
+source = "git+https://github.com/txpipe/pallas#7c3bde8b257614267d18cc138f31bc44395b0962"
+dependencies = [
+ "hex",
+ "minicbor 0.26.5",
+ "serde",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "pallas-configs"
 version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1581,9 +1608,24 @@ source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e40
 dependencies = [
  "base64 0.22.1",
  "num-rational",
- "pallas-addresses 1.0.0-alpha.3",
- "pallas-crypto 1.0.0-alpha.3",
- "pallas-primitives 1.0.0-alpha.3",
+ "pallas-addresses 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-primitives 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "serde",
+ "serde_json",
+ "serde_with",
+]
+
+[[package]]
+name = "pallas-configs"
+version = "1.0.0-alpha.3"
+source = "git+https://github.com/txpipe/pallas#7c3bde8b257614267d18cc138f31bc44395b0962"
+dependencies = [
+ "base64 0.22.1",
+ "num-rational",
+ "pallas-addresses 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-primitives 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
  "serde",
  "serde_json",
  "serde_with",
@@ -1611,7 +1653,20 @@ source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e40
 dependencies = [
  "cryptoxide 0.4.4",
  "hex",
- "pallas-codec 1.0.0-alpha.3",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "rand_core 0.9.3",
+ "serde",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "pallas-crypto"
+version = "1.0.0-alpha.3"
+source = "git+https://github.com/txpipe/pallas#7c3bde8b257614267d18cc138f31bc44395b0962"
+dependencies = [
+ "cryptoxide 0.4.4",
+ "hex",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
  "rand_core 0.9.3",
  "serde",
  "thiserror 1.0.69",
@@ -1638,11 +1693,11 @@ source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e40
 dependencies = [
  "binary-layout",
  "hex",
- "pallas-addresses 1.0.0-alpha.3",
- "pallas-codec 1.0.0-alpha.3",
- "pallas-crypto 1.0.0-alpha.3",
- "pallas-network 1.0.0-alpha.3",
- "pallas-traverse 1.0.0-alpha.3",
+ "pallas-addresses 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-network 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-traverse 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
  "serde",
  "serde_json",
  "serde_with",
@@ -1677,8 +1732,25 @@ dependencies = [
  "byteorder",
  "hex",
  "itertools 0.13.0",
- "pallas-codec 1.0.0-alpha.3",
- "pallas-crypto 1.0.0-alpha.3",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "rand",
+ "socket2 0.5.10",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "pallas-network"
+version = "1.0.0-alpha.3"
+source = "git+https://github.com/txpipe/pallas#7c3bde8b257614267d18cc138f31bc44395b0962"
+dependencies = [
+ "byteorder",
+ "hex",
+ "itertools 0.13.0",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
  "rand",
  "socket2 0.5.10",
  "thiserror 1.0.69",
@@ -1708,8 +1780,20 @@ version = "1.0.0-alpha.3"
 source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e403d82a90900591ac26260854ad85b215d7"
 dependencies = [
  "hex",
- "pallas-codec 1.0.0-alpha.3",
- "pallas-crypto 1.0.0-alpha.3",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "pallas-primitives"
+version = "1.0.0-alpha.3"
+source = "git+https://github.com/txpipe/pallas#7c3bde8b257614267d18cc138f31bc44395b0962"
+dependencies = [
+ "hex",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
  "serde",
  "serde_json",
 ]
@@ -1738,10 +1822,26 @@ source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e40
 dependencies = [
  "hex",
  "itertools 0.13.0",
- "pallas-addresses 1.0.0-alpha.3",
- "pallas-codec 1.0.0-alpha.3",
- "pallas-crypto 1.0.0-alpha.3",
- "pallas-primitives 1.0.0-alpha.3",
+ "pallas-addresses 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-primitives 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "paste",
+ "serde",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "pallas-traverse"
+version = "1.0.0-alpha.3"
+source = "git+https://github.com/txpipe/pallas#7c3bde8b257614267d18cc138f31bc44395b0962"
+dependencies = [
+ "hex",
+ "itertools 0.13.0",
+ "pallas-addresses 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-primitives 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
  "paste",
  "serde",
  "thiserror 1.0.69",
@@ -1771,11 +1871,27 @@ version = "1.0.0-alpha.3"
 source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e403d82a90900591ac26260854ad85b215d7"
 dependencies = [
  "hex",
- "pallas-addresses 1.0.0-alpha.3",
- "pallas-codec 1.0.0-alpha.3",
- "pallas-crypto 1.0.0-alpha.3",
- "pallas-primitives 1.0.0-alpha.3",
- "pallas-traverse 1.0.0-alpha.3",
+ "pallas-addresses 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-primitives 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-traverse 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "pallas-txbuilder"
+version = "1.0.0-alpha.3"
+source = "git+https://github.com/txpipe/pallas#7c3bde8b257614267d18cc138f31bc44395b0962"
+dependencies = [
+ "hex",
+ "pallas-addresses 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-primitives 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-traverse 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -1801,13 +1917,27 @@ name = "pallas-utxorpc"
 version = "1.0.0-alpha.3"
 source = "git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub#5c44e403d82a90900591ac26260854ad85b215d7"
 dependencies = [
- "pallas-codec 1.0.0-alpha.3",
- "pallas-crypto 1.0.0-alpha.3",
- "pallas-primitives 1.0.0-alpha.3",
- "pallas-traverse 1.0.0-alpha.3",
- "pallas-validate",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-primitives 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-traverse 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-validate 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
  "prost-types",
  "utxorpc-spec 0.17.0",
+]
+
+[[package]]
+name = "pallas-utxorpc"
+version = "1.0.0-alpha.3"
+source = "git+https://github.com/txpipe/pallas#7c3bde8b257614267d18cc138f31bc44395b0962"
+dependencies = [
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-primitives 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-traverse 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-validate 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "prost-types",
+ "utxorpc-spec 0.18.1",
 ]
 
 [[package]]
@@ -1818,11 +1948,29 @@ dependencies = [
  "chrono",
  "hex",
  "itertools 0.14.0",
- "pallas-addresses 1.0.0-alpha.3",
- "pallas-codec 1.0.0-alpha.3",
- "pallas-crypto 1.0.0-alpha.3",
- "pallas-primitives 1.0.0-alpha.3",
- "pallas-traverse 1.0.0-alpha.3",
+ "pallas-addresses 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-primitives 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "pallas-traverse 1.0.0-alpha.3 (git+https://github.com/liqwid-labs/pallas?branch=txbuilder-pub)",
+ "serde",
+ "thiserror 1.0.69",
+ "tracing",
+]
+
+[[package]]
+name = "pallas-validate"
+version = "1.0.0-alpha.3"
+source = "git+https://github.com/txpipe/pallas#7c3bde8b257614267d18cc138f31bc44395b0962"
+dependencies = [
+ "chrono",
+ "hex",
+ "itertools 0.14.0",
+ "pallas-addresses 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-codec 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-crypto 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-primitives 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
+ "pallas-traverse 1.0.0-alpha.3 (git+https://github.com/txpipe/pallas)",
  "serde",
  "thiserror 1.0.69",
  "tracing",
@@ -1932,7 +2080,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
 dependencies = [
  "fixedbitset",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
 ]
 
 [[package]]
@@ -2344,7 +2492,7 @@ dependencies = [
  "bytecheck",
  "bytes",
  "hashbrown 0.16.1",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "munge",
  "ptr_meta",
  "rancor",
@@ -2509,7 +2657,7 @@ dependencies = [
  "chrono",
  "hex",
  "indexmap 1.9.3",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "schemars 0.9.0",
  "schemars 1.2.0",
  "serde_core",
@@ -2634,9 +2782,9 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "syn"
-version = "2.0.113"
+version = "2.0.114"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "678faa00651c9eb72dd2020cbdf275d92eccb2400d568e419efdd64838145cb4"
+checksum = "d4d107df263a3013ef9b1879b0df87d706ff80f65a86ea879bd9c31f9b307c2a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3042,6 +3190,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "utxorpc-spec"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e59de89d0dfd8e594377b53a8f67a10de01bb63b15b169248760188fa06fb92a"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "pbjson",
+ "pbjson-types",
+ "prost",
+ "prost-types",
+ "serde",
+ "tonic",
+]
+
+[[package]]
 name = "uuid"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3429,18 +3593,18 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.31"
+version = "0.8.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd74ec98b9250adb3ca554bdde269adf631549f51d8a8f8f0a10b50f1cb298c3"
+checksum = "668f5168d10b9ee831de31933dc111a459c97ec93225beb307aed970d1372dfd"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.31"
+version = "0.8.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8a8d209fdf45cf5138cbb5a506f6b52522a25afccc534d1475dad8e31105c6a"
+checksum = "2c7962b26b0a8685668b671ee4b54d007a67d4eaf05fda79ac0ecf41e32270f1"
 dependencies = [
  "proc-macro2",
  "quote",

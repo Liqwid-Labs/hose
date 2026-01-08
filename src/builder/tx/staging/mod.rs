@@ -1,31 +1,32 @@
 use std::collections::HashMap;
 
+use hydrant::primitives::AssetId;
 use pallas::codec::minicbor;
-use pallas::crypto::hash::Hasher;
 use pallas::ledger::primitives::conway::AuxiliaryData;
 
-use super::{
-    Address, Bytes, DatumBytes, DatumHash, ExUnits, Hash, Input, MintAssets, Output, PubKeyHash,
+use super::TxBuilderError;
+use crate::primitives::{
+    Address, AssetsDelta, Datum, DatumHash, ExUnits, Hash, Input, Output, PubKeyHash,
     RedeemerPurpose, Redeemers, Script, ScriptHash, ScriptKind,
 };
-use crate::builder::transaction::error::TxBuilderError;
 
-// TODO: Don't make wrapper types public
+mod build;
+
 #[derive(Default, PartialEq, Eq, Debug, Clone)]
 pub struct StagingTransaction {
-    pub inputs: Option<Vec<Input>>,
-    pub reference_inputs: Option<Vec<Input>>,
-    pub outputs: Option<Vec<Output>>,
+    pub inputs: Vec<Input>,
+    pub reference_inputs: Vec<Input>,
+    pub outputs: Vec<Output>,
     pub fee: Option<u64>,
-    pub mint: Option<MintAssets>,
+    pub mint: AssetsDelta,
     pub valid_from_slot: Option<u64>,
     pub invalid_from_slot: Option<u64>,
     pub network_id: Option<u8>,
-    pub collateral_inputs: Option<Vec<Input>>,
+    pub collateral_inputs: Vec<Input>,
     pub collateral_output: Option<Output>,
     pub disclosed_signers: Option<Vec<PubKeyHash>>,
-    pub scripts: Option<HashMap<ScriptHash, Script>>,
-    pub datums: Option<HashMap<DatumHash, DatumBytes>>,
+    pub scripts: HashMap<ScriptHash, Script>,
+    pub datums: HashMap<DatumHash, Datum>,
     pub redeemers: Option<Redeemers>,
     pub script_data_hash: Option<Hash<32>>,
     pub signature_amount_override: Option<u8>,
@@ -44,44 +45,32 @@ impl StagingTransaction {
     }
 
     pub fn input(mut self, input: Input) -> Self {
-        let mut txins = self.inputs.unwrap_or_default();
-        txins.push(input);
-        self.inputs = Some(txins);
+        self.inputs.push(input);
         self
     }
 
     pub fn remove_input(mut self, input: Input) -> Self {
-        let mut txins = self.inputs.unwrap_or_default();
-        txins.retain(|x| *x != input);
-        self.inputs = Some(txins);
+        self.inputs.retain(|x| *x != input);
         self
     }
 
     pub fn reference_input(mut self, input: Input) -> Self {
-        let mut ref_txins = self.reference_inputs.unwrap_or_default();
-        ref_txins.push(input);
-        self.reference_inputs = Some(ref_txins);
+        self.reference_inputs.push(input);
         self
     }
 
     pub fn remove_reference_input(mut self, input: Input) -> Self {
-        let mut ref_txins = self.reference_inputs.unwrap_or_default();
-        ref_txins.retain(|x| *x != input);
-        self.reference_inputs = Some(ref_txins);
+        self.reference_inputs.retain(|x| *x != input);
         self
     }
 
     pub fn output(mut self, output: Output) -> Self {
-        let mut txouts = self.outputs.unwrap_or_default();
-        txouts.push(output);
-        self.outputs = Some(txouts);
+        self.outputs.push(output);
         self
     }
 
     pub fn remove_output(mut self, index: usize) -> Self {
-        let mut txouts = self.outputs.unwrap_or_default();
-        txouts.remove(index);
-        self.outputs = Some(txouts);
+        self.outputs.remove(index);
         self
     }
 
@@ -105,44 +94,16 @@ impl StagingTransaction {
             return Err(TxBuilderError::AssetNameTooLong);
         }
 
-        let mut mint = self.mint.unwrap_or_default();
-
-        mint.entry(Hash(*policy))
-            .and_modify(|policy_map| {
-                policy_map
-                    .entry(name.clone().into())
-                    .and_modify(|asset_map| {
-                        *asset_map += amount;
-                    })
-                    .or_insert(amount);
-            })
-            .or_insert_with(|| {
-                let mut map: HashMap<Bytes, i64> = HashMap::new();
-                map.insert(name.clone().into(), amount);
-                map
-            });
-
-        self.mint = Some(mint);
+        self.mint
+            .entry(AssetId::new(policy, name.clone()))
+            .and_modify(|asset_amount| *asset_amount += amount)
+            .or_insert(amount);
 
         Ok(self)
     }
 
     pub fn remove_mint_asset(mut self, policy: Hash<28>, name: Vec<u8>) -> Self {
-        let mut mint = if let Some(mint) = self.mint {
-            mint
-        } else {
-            return self;
-        };
-
-        if let Some(assets) = mint.get_mut(&Hash(*policy)) {
-            assets.remove(&name.into());
-            if assets.is_empty() {
-                mint.remove(&Hash(*policy));
-            }
-        }
-
-        self.mint = Some(mint);
-
+        self.mint.remove(&AssetId::new(policy, name));
         self
     }
 
@@ -177,16 +138,12 @@ impl StagingTransaction {
     }
 
     pub fn collateral_input(mut self, input: Input) -> Self {
-        let mut coll_ins = self.collateral_inputs.unwrap_or_default();
-        coll_ins.push(input);
-        self.collateral_inputs = Some(coll_ins);
+        self.collateral_inputs.push(input);
         self
     }
 
     pub fn remove_collateral_input(mut self, input: Input) -> Self {
-        let mut coll_ins = self.collateral_inputs.unwrap_or_default();
-        coll_ins.retain(|x| *x != input);
-        self.collateral_inputs = Some(coll_ins);
+        self.collateral_inputs.retain(|x| *x != input);
         self
     }
 
@@ -200,14 +157,14 @@ impl StagingTransaction {
         self
     }
 
-    pub fn disclosed_signer(mut self, pub_key_hash: Hash<28>) -> Self {
+    pub fn disclosed_signer(mut self, pub_key_hash: PubKeyHash) -> Self {
         let mut disclosed_signers = self.disclosed_signers.unwrap_or_default();
         disclosed_signers.push(Hash(*pub_key_hash));
         self.disclosed_signers = Some(disclosed_signers);
         self
     }
 
-    pub fn remove_disclosed_signer(mut self, pub_key_hash: Hash<28>) -> Self {
+    pub fn remove_disclosed_signer(mut self, pub_key_hash: PubKeyHash) -> Self {
         let mut disclosed_signers = self.disclosed_signers.unwrap_or_default();
         disclosed_signers.retain(|x| *x != Hash(*pub_key_hash));
         self.disclosed_signers = Some(disclosed_signers);
@@ -215,61 +172,36 @@ impl StagingTransaction {
     }
 
     pub fn script(mut self, language: ScriptKind, bytes: Vec<u8>) -> Self {
-        let mut scripts = self.scripts.unwrap_or_default();
-
-        let hash = match language {
-            ScriptKind::Native => Hasher::<224>::hash_tagged(bytes.as_ref(), 0),
-            ScriptKind::PlutusV1 => Hasher::<224>::hash_tagged(bytes.as_ref(), 1),
-            ScriptKind::PlutusV2 => Hasher::<224>::hash_tagged(bytes.as_ref(), 2),
-            ScriptKind::PlutusV3 => Hasher::<224>::hash_tagged(bytes.as_ref(), 3),
-        };
-
-        scripts.insert(
-            Hash(*hash),
+        let hash = language.hash(&bytes);
+        self.scripts.insert(
+            hash,
             Script {
                 kind: language,
+                hash,
                 bytes: bytes.into(),
             },
         );
-
-        self.scripts = Some(scripts);
         self
     }
 
     pub fn remove_script_by_hash(mut self, script_hash: Hash<28>) -> Self {
-        let mut scripts = self.scripts.unwrap_or_default();
-
-        scripts.remove(&Hash(*script_hash));
-
-        self.scripts = Some(scripts);
+        self.scripts.remove(&script_hash);
         self
     }
 
     pub fn datum(mut self, datum: Vec<u8>) -> Self {
-        let mut datums = self.datums.unwrap_or_default();
-
-        let hash = Hasher::<256>::hash_cbor(&datum);
-
-        datums.insert(Hash(*hash), datum.into());
-        self.datums = Some(datums);
+        let datum = Datum::new(datum);
+        self.datums.insert(datum.hash, datum);
         self
     }
 
     pub fn remove_datum(mut self, datum: Vec<u8>) -> Self {
-        let mut datums = self.datums.unwrap_or_default();
-
-        let hash = Hasher::<256>::hash_cbor(&datum);
-
-        datums.remove(&Hash(*hash));
-        self.datums = Some(datums);
+        self.datums.remove(&Datum::new(datum).hash);
         self
     }
 
-    pub fn remove_datum_by_hash(mut self, datum_hash: Hash<32>) -> Self {
-        let mut datums = self.datums.unwrap_or_default();
-
-        datums.remove(&Hash(*datum_hash));
-        self.datums = Some(datums);
+    pub fn remove_datum_by_hash(mut self, datum_hash: DatumHash) -> Self {
+        self.datums.remove(&Hash(*datum_hash));
         self
     }
 

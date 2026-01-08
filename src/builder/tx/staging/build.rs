@@ -1,72 +1,57 @@
+use std::collections::BTreeMap;
 use std::ops::Deref;
 
-use pallas::codec::utils::CborWrap;
-use pallas::crypto::hash::Hash;
+use pallas::codec::utils::Bytes;
+use pallas::crypto::hash::Hash as PallasHash;
 use pallas::ledger::primitives::conway::{
-    DatumOption, ExUnits as PallasExUnits, NativeScript, NetworkId, NonZeroInt, PlutusData,
-    PlutusScript, PostAlonzoTransactionOutput, Redeemer, RedeemerTag, ScriptRef as PallasScript,
-    TransactionBody, TransactionInput, TransactionOutput, Tx, Value, WitnessSet,
+    ExUnits as PallasExUnits, Multiasset, NativeScript, NetworkId, NonZeroInt, PlutusData,
+    PlutusScript, Redeemer, RedeemerTag, TransactionBody, TransactionInput, Tx, WitnessSet,
 };
-use pallas::ledger::primitives::{Fragment, KeepRaw, NonEmptySet, PositiveCoin};
+use pallas::ledger::primitives::{Fragment, KeepRaw, NonEmptySet};
 use pallas::ledger::traverse::ComputeHash;
 
-use super::model::{Bytes, Hash as HydrantHash};
-use crate::builder::transaction::error::TxBuilderError;
-use crate::builder::transaction::model::{
-    BuiltTransaction, DatumKind, ExUnits, Output, RedeemerPurpose, ScriptKind, StagingTransaction,
-};
+use crate::builder::tx::{BuiltTransaction, StagingTransaction, TxBuilderError};
+use crate::primitives::{ExUnits, Hash, Output, RedeemerPurpose, ScriptKind};
 
 impl StagingTransaction {
     pub fn build_conway(self) -> Result<BuiltTransaction, TxBuilderError> {
         let mut inputs = self
             .inputs
-            .unwrap_or_default()
             .iter()
             .map(|x| TransactionInput {
-                transaction_id: x.tx_hash.0.into(),
-                index: x.txo_index,
+                transaction_id: x.hash.0.into(),
+                index: x.index,
             })
             .collect::<Vec<_>>();
 
         inputs.sort_unstable_by_key(|x| (x.transaction_id, x.index));
 
-        let outputs = self.outputs.unwrap_or_default();
-        let outputs = outputs
+        let outputs = self
+            .outputs
             .iter()
             .map(Output::build_babbage)
             .collect::<Result<Vec<_>, _>>()?;
 
-        let mint: Vec<(
-            Hash<28>,
-            std::collections::BTreeMap<pallas::codec::utils::Bytes, _>,
-        )> = self
-            .mint
-            .iter()
-            .flat_map(|x| x.deref().iter())
-            .map(|(pid, assets)| {
-                (
-                    Hash::<28>::from(pid.0),
-                    assets
-                        .iter()
-                        .map(|(n, x)| (n.clone().into(), NonZeroInt::try_from(*x).unwrap()))
-                        .collect(),
-                )
-            })
-            .collect::<Vec<_>>();
-        let mint: Option<pallas::ledger::primitives::conway::Multiasset<NonZeroInt>> =
-            if mint.is_empty() {
-                None
-            } else {
-                Some(mint.into_iter().collect())
+        let mut mint: BTreeMap<PallasHash<28>, BTreeMap<Bytes, NonZeroInt>> = BTreeMap::new();
+
+        for (asset_id, amount) in self.mint.iter() {
+            let Ok(amount) = NonZeroInt::try_from(*amount) else {
+                continue;
             };
+            mint.entry(asset_id.policy.0.into())
+                .or_default()
+                .insert(asset_id.name.clone().into(), amount);
+        }
+
+        let mint: Option<Multiasset<NonZeroInt>> =
+            (!mint.is_empty()).then(|| mint.into_iter().collect());
 
         let collateral = NonEmptySet::from_vec(
             self.collateral_inputs
-                .unwrap_or_default()
                 .iter()
                 .map(|x| TransactionInput {
-                    transaction_id: x.tx_hash.0.into(),
-                    index: x.txo_index,
+                    transaction_id: x.hash.0.into(),
+                    index: x.index,
                 })
                 .collect(),
         );
@@ -96,11 +81,10 @@ impl StagingTransaction {
 
         let reference_inputs = NonEmptySet::from_vec(
             self.reference_inputs
-                .unwrap_or_default()
                 .iter()
                 .map(|x| TransactionInput {
-                    transaction_id: x.tx_hash.0.into(),
-                    index: x.txo_index,
+                    transaction_id: x.hash.0.into(),
+                    index: x.index,
                 })
                 .collect(),
         );
@@ -108,10 +92,10 @@ impl StagingTransaction {
         let (mut native_script, mut plutus_v1_script, mut plutus_v2_script, mut plutus_v3_script) =
             (vec![], vec![], vec![], vec![]);
 
-        for (_, script) in self.scripts.unwrap_or_default() {
+        for (_, script) in self.scripts {
             match script.kind {
                 ScriptKind::Native => {
-                    let script = NativeScript::decode_fragment(&script.bytes.0)
+                    let script = NativeScript::decode_fragment(&script.bytes)
                         .map_err(|_| TxBuilderError::MalformedScript)?;
 
                     native_script.push(script)
@@ -136,17 +120,16 @@ impl StagingTransaction {
 
         let plutus_data = self
             .datums
-            .unwrap_or_default()
             .iter()
-            .map(|x| {
-                PlutusData::decode_fragment(x.1.as_ref())
+            .map(|(_, datum)| {
+                PlutusData::decode_fragment(&datum.bytes)
                     .map_err(|_| TxBuilderError::MalformedDatum)
             })
             .collect::<Result<Vec<_>, _>>()?;
 
         let mut mint_policies = mint
             .iter()
-            .flat_map(|x: &pallas::ledger::primitives::conway::Multiasset<NonZeroInt>| x.iter())
+            .flat_map(|x: &Multiasset<NonZeroInt>| x.iter())
             .map(|(p, _)| *p)
             .collect::<Vec<_>>();
 
@@ -172,9 +155,7 @@ impl StagingTransaction {
                     RedeemerPurpose::Spend(txin) => {
                         let index = inputs
                             .iter()
-                            .position(|x| {
-                                (*x.transaction_id, x.index) == (txin.tx_hash.0, txin.txo_index)
-                            })
+                            .position(|x| (*x.transaction_id, x.index) == (txin.hash.0, txin.index))
                             .ok_or(TxBuilderError::RedeemerTargetMissing)?
                             as u32;
 
@@ -277,91 +258,9 @@ impl StagingTransaction {
             .into();
 
         Ok(BuiltTransaction {
-            tx_hash: HydrantHash(*pallas_tx.transaction_body.compute_hash()),
-            tx_bytes: Bytes(pallas_tx.encode_fragment().unwrap()),
+            hash: Hash(*pallas_tx.transaction_body.compute_hash()),
+            bytes: pallas_tx.encode_fragment().unwrap(),
             signatures: None,
         })
-    }
-}
-
-impl Output {
-    pub fn build_babbage(&self) -> Result<TransactionOutput<'_>, TxBuilderError> {
-        let assets = self
-            .assets
-            .iter()
-            .flat_map(|x| x.deref().iter())
-            .map(|(pid, assets)| {
-                (
-                    pid.0.into(),
-                    assets
-                        .iter()
-                        .map(|(n, x)| (n.clone().into(), PositiveCoin::try_from(*x).unwrap()))
-                        .collect(),
-                )
-            })
-            .collect::<Vec<_>>();
-        let assets = if assets.is_empty() {
-            None
-        } else {
-            Some(assets.into_iter().collect())
-        };
-
-        let value = match assets {
-            Some(assets) => Value::Multiasset(self.lovelace, assets),
-            None => Value::Coin(self.lovelace),
-        };
-
-        let datum_option = if let Some(ref d) = self.datum {
-            match d.kind {
-                DatumKind::Hash => {
-                    let dh: [u8; 32] = d
-                        .bytes
-                        .as_ref()
-                        .try_into()
-                        .map_err(|_| TxBuilderError::MalformedDatumHash)?;
-                    Some(DatumOption::Hash(dh.into()))
-                }
-                DatumKind::Inline => {
-                    let pd = PlutusData::decode_fragment(d.bytes.as_ref())
-                        .map_err(|_| TxBuilderError::MalformedDatum)?;
-                    Some(DatumOption::Data(CborWrap(pd.into())))
-                }
-            }
-        } else {
-            None
-        };
-
-        let script_ref = if let Some(ref s) = self.script {
-            let script = match s.kind {
-                ScriptKind::Native => PallasScript::NativeScript(
-                    NativeScript::decode_fragment(s.bytes.as_ref())
-                        .map_err(|_| TxBuilderError::MalformedScript)?
-                        .into(),
-                ),
-                ScriptKind::PlutusV1 => PallasScript::PlutusV1Script(PlutusScript::<1>(
-                    s.bytes.as_ref().to_vec().into(),
-                )),
-                ScriptKind::PlutusV2 => PallasScript::PlutusV2Script(PlutusScript::<2>(
-                    s.bytes.as_ref().to_vec().into(),
-                )),
-                ScriptKind::PlutusV3 => PallasScript::PlutusV3Script(PlutusScript::<3>(
-                    s.bytes.as_ref().to_vec().into(),
-                )),
-            };
-
-            Some(CborWrap(script))
-        } else {
-            None
-        };
-
-        Ok(TransactionOutput::PostAlonzo(
-            PostAlonzoTransactionOutput {
-                address: self.address.to_vec().into(),
-                value,
-                datum_option: datum_option.map(|x| x.into()),
-                script_ref,
-            }
-            .into(),
-        ))
     }
 }

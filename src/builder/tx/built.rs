@@ -3,14 +3,13 @@ use std::collections::HashMap;
 use pallas::crypto::key::ed25519;
 use pallas::ledger::primitives::{Fragment, NonEmptySet, conway};
 
-use super::super::error::TxBuilderError;
-use super::super::model::Ed25519Signer;
-use super::{Bytes, Hash, PublicKey, Signature, TxHash};
+use super::TxBuilderError;
+use crate::primitives::{Ed25519Signer, Hash, PublicKey, Signature, TxHash};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct BuiltTransaction {
-    pub tx_hash: TxHash,
-    pub tx_bytes: Bytes,
+    pub hash: TxHash,
+    pub bytes: Vec<u8>,
     pub signatures: Option<HashMap<PublicKey, Signature>>,
 }
 
@@ -22,18 +21,15 @@ impl BuiltTransaction {
             .try_into()
             .map_err(|_| TxBuilderError::MalformedKey)?;
 
-        let signature: [u8; ed25519::Signature::SIZE] = private_key
-            .sign(self.tx_hash.0)
-            .as_ref()
-            .try_into()
-            .unwrap();
+        let signature: [u8; ed25519::Signature::SIZE] =
+            private_key.sign(self.hash.0).as_ref().try_into().unwrap();
 
         let mut new_sigs = self.signatures.unwrap_or_default();
         new_sigs.insert(Hash(pubkey), Hash(signature));
         self.signatures = Some(new_sigs);
 
         // TODO: chance for serialisation round trip issues?
-        let mut tx = conway::Tx::decode_fragment(&self.tx_bytes.0)
+        let mut tx = conway::Tx::decode_fragment(&self.bytes)
             .map_err(|_| TxBuilderError::CorruptedTxBytes)?;
 
         let mut vkey_witnesses = tx
@@ -51,7 +47,7 @@ impl BuiltTransaction {
         tx.transaction_witness_set.vkeywitness =
             Some(NonEmptySet::from_vec(vkey_witnesses).unwrap());
 
-        self.tx_bytes = tx.encode_fragment().unwrap().into();
+        self.bytes = tx.encode_fragment().unwrap().into();
 
         Ok(self)
     }
@@ -74,7 +70,7 @@ impl BuiltTransaction {
         self.signatures = Some(new_sigs);
 
         // TODO: chance for serialisation round trip issues?
-        let mut tx = conway::Tx::decode_fragment(&self.tx_bytes.0)
+        let mut tx = conway::Tx::decode_fragment(&self.bytes)
             .map_err(|_| TxBuilderError::CorruptedTxBytes)?;
 
         let mut vkey_witnesses = tx
@@ -90,7 +86,7 @@ impl BuiltTransaction {
         tx.transaction_witness_set.vkeywitness =
             Some(NonEmptySet::from_vec(vkey_witnesses).unwrap());
 
-        self.tx_bytes = tx.encode_fragment().unwrap().into();
+        self.bytes = tx.encode_fragment().unwrap().into();
 
         Ok(self)
     }
@@ -109,7 +105,7 @@ impl BuiltTransaction {
         self.signatures = Some(new_sigs);
 
         // TODO: chance for serialisation round trip issues?
-        let mut tx = conway::Tx::decode_fragment(&self.tx_bytes.0)
+        let mut tx = conway::Tx::decode_fragment(&self.bytes)
             .map_err(|_| TxBuilderError::CorruptedTxBytes)?;
         let mut vkey_witnesses = tx
             .transaction_witness_set
@@ -123,7 +119,7 @@ impl BuiltTransaction {
         tx.transaction_witness_set.vkeywitness =
             Some(NonEmptySet::from_vec(vkey_witnesses).unwrap());
 
-        self.tx_bytes = tx.encode_fragment().unwrap().into();
+        self.bytes = tx.encode_fragment().unwrap().into();
 
         Ok(self)
     }

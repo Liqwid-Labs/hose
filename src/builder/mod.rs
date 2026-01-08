@@ -1,25 +1,23 @@
 //! High-level transaction builder API
 
 use anyhow::Context;
-use hydrant::primitives::{Hash, TxHash, TxOutputPointer};
+use hydrant::UtxoIndexer;
+use hydrant::primitives::TxOutputPointer;
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
 
-use crate::builder::coin_selection::handle_change;
-use crate::builder::transaction::model::{BuiltTransaction, StagingTransaction};
-pub use crate::builder::transaction::model::{Input, Output};
+use crate::ogmios::OgmiosClient;
+use crate::ogmios::pparams::ProtocolParams;
+use crate::primitives::{Hash, Input, Output, ScriptKind, TxHash};
+use crate::wallet::Wallet;
 
 pub mod coin_selection;
 pub mod fee;
-pub mod transaction;
+pub mod tx;
 
-use coin_selection::{get_input_coins, get_output_coins, select_coins};
+use coin_selection::{handle_change, select_coins};
 use fee::calculate_min_fee;
-
-use crate::builder::transaction::model::ScriptKind;
-use crate::ogmios::OgmiosClient;
-use crate::ogmios::pparams::ProtocolParams;
-use crate::wallet::Wallet;
+use tx::{BuiltTransaction, StagingTransaction};
 
 pub struct TxBuilder {
     body: StagingTransaction,
@@ -107,38 +105,21 @@ impl TxBuilder {
         self.body
             .inputs
             .iter()
-            .flatten()
-            .chain(self.body.reference_inputs.iter().flatten())
+            .chain(self.body.reference_inputs.iter())
             .map(Into::into)
             .collect::<Vec<_>>()
     }
 
-    fn all_inputs(&self) -> Vec<TxOutputPointer> {
-        self.body
-            .inputs
-            .iter()
-            .flatten()
-            .chain(self.body.reference_inputs.iter().flatten())
-            .chain(self.body.collateral_inputs.iter().flatten())
-            .map(Into::into)
-            .collect::<Vec<_>>()
-    }
-
-    async fn requires_collateral(&self, ogmios: &OgmiosClient) -> anyhow::Result<bool> {
+    fn requires_collateral(&self, indexer: &UtxoIndexer) -> anyhow::Result<bool> {
         // any mints (minting policy) or scripts (inline)
-        if self.body.mint.is_some() || self.body.scripts.is_some() {
+        if !self.body.mint.is_empty() || !self.body.scripts.is_empty() {
             return Ok(true);
         }
 
         // any input comes from a script or contains a script (validator)
-        let inputs = self
-            .non_collateral_inputs()
-            .iter()
-            .map(Into::into)
-            .collect::<Vec<_>>();
-        let input_utxos = ogmios.utxos_by_output(&inputs).await?;
+        let input_utxos = indexer.utxos(&self.non_collateral_inputs())?;
         if input_utxos.iter().any(|input| {
-            Address::from_bech32(&input.address).unwrap().has_script() || input.script.is_some()
+            Address::from_bytes(&input.address).unwrap().has_script() || input.script.is_some()
         }) {
             return Ok(true);
         }
@@ -153,37 +134,21 @@ impl TxBuilder {
     /// 5. BUILD
     pub async fn build(
         mut self,
+        indexer: &UtxoIndexer,
         ogmios: &OgmiosClient,
         pparams: &ProtocolParams,
     ) -> anyhow::Result<BuiltTx> {
         let change_address = self
             .change_address
             .clone()
-            .context("change address not set")?
-            .to_bech32()
-            .context("invalid change address")?;
+            .context("change address not set")?;
 
-        // TODO: pick collateral input
-        // TODO: minimum output
-        let address_utxos = ogmios
-            .utxos_by_addresses(&[change_address.as_str()])
-            .await?;
+        let address_utxos = indexer.address_utxos(&change_address.to_vec())?;
 
         // 1. balance inputs/outputs with fee
-        let mut fee = calculate_min_fee(ogmios, &self.body, pparams).await;
+        let mut fee = calculate_min_fee(indexer, ogmios, &self.body, pparams).await;
         loop {
-            let input_coins = get_input_coins(ogmios, &self.all_inputs()).await;
-            let output_coins = get_output_coins(&self.body).await;
-
-            let additional_inputs = select_coins(
-                pparams,
-                &address_utxos,
-                &self.all_inputs(),
-                &input_coins,
-                &output_coins,
-                fee,
-            )
-            .await;
+            let additional_inputs = select_coins(pparams, &address_utxos, &self.body, fee).await;
             if additional_inputs.is_empty() {
                 break;
             }
@@ -191,38 +156,35 @@ impl TxBuilder {
                 self.body = self.body.input(input.into());
             }
 
-            fee = calculate_min_fee(ogmios, &self.body, pparams).await;
+            fee = calculate_min_fee(indexer, ogmios, &self.body, pparams).await;
             self.body = self.body.fee(fee);
         }
 
         // 2. add change output
-        let input_coins = get_input_coins(ogmios, &self.all_inputs()).await;
-        let output_coins = get_output_coins(&self.body).await;
-
-        let change = handle_change(
+        // TODO: minimum output
+        if let Some(change_output) = handle_change(
+            indexer,
             self.change_address.as_ref().unwrap(),
-            &input_coins,
-            &output_coins,
+            &self.body,
             fee,
-        );
-        for output in change {
-            self.body = self.body.output(output);
+        )? {
+            self.body = self.body.output(change_output);
         }
 
         // 3. pick collateral input
-        if self.requires_collateral(ogmios).await? && self.body.collateral_inputs.is_none() {
+        if self.requires_collateral(indexer)? && self.body.collateral_inputs.is_empty() {
             let required_lovelace = ((fee as f64) * pparams.collateral_percentage).ceil() as u64;
 
             // TODO: support multiple collateral inputs
             let mut collateral_utxos = address_utxos
                 .iter()
-                .filter(|utxo| utxo.value.lovelace > required_lovelace)
+                .filter(|utxo| utxo.lovelace > required_lovelace)
                 .collect::<Vec<_>>();
-            collateral_utxos.sort_unstable_by_key(|utxo| utxo.value.lovelace);
+            collateral_utxos.sort_unstable_by_key(|utxo| utxo.lovelace);
             let collateral_utxo = *collateral_utxos
                 .first()
                 .context("no utxos large enough for collateral")?;
-            let collateral_utxo_pointer: TxOutputPointer = collateral_utxo.clone().into();
+            let collateral_utxo_pointer: TxOutputPointer = collateral_utxo.into();
             self.body = self.body.collateral_input(collateral_utxo_pointer.into());
 
             // TODO: collateral output
@@ -257,7 +219,7 @@ impl BuiltTx {
     }
 
     pub fn cbor(&self) -> Vec<u8> {
-        self.tx.tx_bytes.0.clone()
+        self.tx.bytes.clone()
     }
 
     pub fn cbor_hex(&self) -> String {
@@ -265,6 +227,6 @@ impl BuiltTx {
     }
 
     pub fn hash(&self) -> anyhow::Result<TxHash> {
-        Ok(self.tx.tx_hash.0.into())
+        Ok(self.tx.hash.0.into())
     }
 }

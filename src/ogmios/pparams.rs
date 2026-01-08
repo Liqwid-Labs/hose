@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::codec::AdaBalance;
-use crate::ogmios::codec::ExecutionUnits;
+use crate::define_ogmios_error;
+use crate::ogmios::codec::{Era, ExecutionUnits};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,4 +54,17 @@ pub struct MinFeeReferenceScripts {
     /// Cost per byte, multiplied by `multiplier ^ range_index`
     pub base: f64,
     pub multiplier: f64,
+}
+
+define_ogmios_error! {
+    #[derive(Debug, Clone)]
+    pub enum ProtocolParamsError {
+        2001 => EraMismatch {
+            query_era: Era,
+            ledger_era: Era,
+        },
+        2002 => UnavailableInCurrentEra,
+        2003 => StateAcquiredExpired(String)
+        _ => Unknown { error: Value }
+    }
 }
