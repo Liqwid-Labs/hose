@@ -6,6 +6,7 @@ use pallas::crypto::hash::Hash;
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
 use pallas::network::miniprotocols::localstate::queries_v16::NextEpochChange;
+use tracing::info;
 
 use crate::builder::coin_selection::handle_change;
 use crate::builder::transaction::build_conway::BuildConway as _;
@@ -138,8 +139,6 @@ impl TxBuilder {
         ogmios: &OgmiosClient,
         pparams: &ProtocolParams,
     ) -> anyhow::Result<BuiltTx> {
-        let mut body = self.body.clone();
-
         let change_address = self
             .change_address
             .clone()
@@ -167,6 +166,9 @@ impl TxBuilder {
             )
             .await;
             if additional_inputs.is_empty() {
+                // No need to add more inputs, but we still need to recalculate the fee
+                fee = calculate_min_fee(ogmios, &self.body, pparams).await;
+                self.body.fee = Some(fee);
                 break;
             }
             for input in additional_inputs {
@@ -186,6 +188,7 @@ impl TxBuilder {
             &output_coins,
             fee,
         );
+
         for output in change {
             self.body = self.body.output(output);
         }

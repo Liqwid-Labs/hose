@@ -405,6 +405,15 @@ impl Input {
     }
 }
 
+impl From<hydrant::primitives::TxOutputPointer> for Input {
+    fn from(ptr: hydrant::primitives::TxOutputPointer) -> Self {
+        Self {
+            tx_hash: Bytes32(*ptr.hash),
+            txo_index: ptr.index as u64,
+        }
+    }
+}
+
 impl Into<hydrant::primitives::TxOutputPointer> for Input {
     fn into(self) -> hydrant::primitives::TxOutputPointer {
         hydrant::primitives::TxOutputPointer::new(self.tx_hash.0.into(), self.txo_index as usize)
