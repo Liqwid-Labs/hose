@@ -15,6 +15,7 @@ use tracing::{error, info};
 use url::Url;
 
 pub mod config;
+pub mod devnet_tests;
 
 #[tokio::main]
 pub async fn main() -> anyhow::Result<()> {

@@ -150,6 +150,9 @@ impl TxBuilder {
         loop {
             let additional_inputs = select_coins(pparams, &address_utxos, &self.body, fee).await;
             if additional_inputs.is_empty() {
+                // No need to add more inputs, but we still need to recalculate the fee
+                fee = calculate_min_fee(ogmios, &self.body, pparams).await;
+                self.body.fee = Some(fee);
                 break;
             }
             for input in additional_inputs {
