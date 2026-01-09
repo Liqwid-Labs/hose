@@ -146,38 +146,43 @@ mod test {
 
         let change_address = context.wallet.address().clone();
 
-        let tx1 = TxBuilder::new(context.network_id)
-            .change_address(Address::Shelley(change_address.clone()))
-            .add_output(Output::new(
-                Address::Shelley(context.wallet.address().clone()),
-                42_000_000,
-            ))
-            .build(&context.ogmios, &context.protocol_params)
-            .await?;
+        let (_signed_tx, output_pointer) = {
+            let tx = TxBuilder::new(context.network_id)
+                .change_address(Address::Shelley(change_address.clone()))
+                .add_output(Output::new(
+                    Address::Shelley(context.wallet.address().clone()),
+                    42_000_000,
+                ))
+                .build(&context.ogmios, &context.protocol_params)
+                .await?;
 
-        let (signed, _res) = sign_and_submit_tx(context, tx1).await?;
+            let (signed, _res) = sign_and_submit_tx(context, tx).await?;
 
-        let output_idx = signed
-            .body()
-            .outputs
-            .as_ref()
-            .unwrap()
-            .iter()
-            .position(|output| output.lovelace == 42_000_000)
-            .unwrap();
+            let output_idx = signed
+                .body()
+                .outputs
+                .as_ref()
+                .context("no outputs in first transaction")?
+                .iter()
+                .position(|output| output.lovelace == 42_000_000)
+                .context("output with 42 ada not found")?;
 
-        let output_pointer: hydrant::primitives::TxOutputPointer =
-            hydrant::primitives::TxOutputPointer::new(signed.hash()?.0.into(), output_idx);
+            let output_pointer: hydrant::primitives::TxOutputPointer =
+                hydrant::primitives::TxOutputPointer::new(signed.hash()?.0.into(), output_idx);
 
-        util::wait_n_slots(context, 1).await?;
+            util::wait_n_slots(context, 1).await?;
+            (signed, output_pointer)
+        };
 
-        let tx2 = TxBuilder::new(context.network_id)
-            .change_address(Address::Shelley(change_address.clone()))
-            .add_input(output_pointer.into())
-            .build(&context.ogmios, &context.protocol_params)
-            .await?;
+        let (_signed_tx, _res) = {
+            let tx = TxBuilder::new(context.network_id)
+                .change_address(Address::Shelley(change_address.clone()))
+                .add_input(output_pointer.into())
+                .build(&context.ogmios, &context.protocol_params)
+                .await?;
 
-        let (_signed, _res) = sign_and_submit_tx(context, tx2).await?;
+            sign_and_submit_tx(context, tx).await?
+        };
 
         Ok(())
     }
