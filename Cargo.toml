@@ -20,7 +20,7 @@ serde_repr = "0.1.20"
 
 hydrant = { git = "https://github.com/liqwid-labs/hydrant" }
 polymer = { git = "https://github.com/liqwid-labs/polymer" }
-pallas = { git = "https://github.com/liqwid-labs/pallas", branch = "txbuilder-pub", features = ["unstable"] }
+pallas = { git = "https://github.com/txpipe/pallas", features = ["unstable"] }
 
 num = "0.4.3"
 num-bigint = "0.4.6"

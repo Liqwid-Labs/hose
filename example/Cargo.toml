@@ -7,15 +7,14 @@ name = "hose-demo"
 path = "src/main.rs"
 
 [dependencies]
-clap = { version = "4.5.51", features = ["derive", "env"] }
-anyhow = "1.0"
-dotenv = "0.15.0"
-hose = { path = ".." }
 tokio = { version = "1.43.0", features = ["full"] }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
+anyhow = "1.0"
+clap = { version = "4.5.51", features = ["derive", "env"] }
+dotenv = "0.15.0"
 url = "2.5.7"
-pallas = { git = "https://github.com/liqwid-labs/pallas", branch = "txbuilder-pub", features = [
-    "unstable",
-] }
-hydrant = { path = "../../hydrant" }
+
+hose = { path = ".." }
+hydrant = { git = "https://github.com/liqwid-labs/hydrant" }
+pallas = { git = "https://github.com/txpipe/pallas", features = ["unstable"] }
