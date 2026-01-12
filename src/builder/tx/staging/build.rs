@@ -120,8 +120,8 @@ impl StagingTransaction {
 
         let plutus_data = self
             .datums
-            .iter()
-            .map(|(_, datum)| {
+            .values()
+            .map(|datum| {
                 PlutusData::decode_fragment(&datum.bytes)
                     .map_err(|_| TxBuilderError::MalformedDatum)
             })

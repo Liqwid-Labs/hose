@@ -178,7 +178,7 @@ impl StagingTransaction {
             Script {
                 kind: language,
                 hash,
-                bytes: bytes.into(),
+                bytes,
             },
         );
         self
@@ -229,10 +229,7 @@ impl StagingTransaction {
         ex_units: Option<ExUnits>,
     ) -> Self {
         let mut rdmrs = self.redeemers.unwrap_or_default();
-        rdmrs.insert(
-            RedeemerPurpose::Spend(input),
-            (plutus_data.into(), ex_units),
-        );
+        rdmrs.insert(RedeemerPurpose::Spend(input), (plutus_data, ex_units));
         self.redeemers = Some(rdmrs);
 
         self
@@ -255,7 +252,7 @@ impl StagingTransaction {
         let mut rdmrs = self.redeemers.unwrap_or_default();
         rdmrs.insert(
             RedeemerPurpose::Mint(Hash(*policy)),
-            (plutus_data.into(), ex_units),
+            (plutus_data, ex_units),
         );
         self.redeemers = Some(rdmrs);
 
