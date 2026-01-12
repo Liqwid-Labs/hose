@@ -1,6 +1,6 @@
 use hydrant::UtxoIndexer;
 use hydrant::primitives::TxOutputPointer;
-use num::{BigRational, ToPrimitive};
+use num::{BigRational, ToPrimitive as _};
 
 use crate::builder::tx::StagingTransaction;
 use crate::ogmios::OgmiosClient;

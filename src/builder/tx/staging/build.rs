@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::ops::Deref;
+use std::ops::Deref as _;
 
 use pallas::codec::utils::Bytes;
 use pallas::crypto::hash::Hash as PallasHash;
