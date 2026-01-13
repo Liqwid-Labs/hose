@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 
 use super::codec::*;
 use super::script::ScriptError;
-use super::utxo::Utxo;
 use crate::define_ogmios_error;
 
 // -----------
@@ -13,7 +12,6 @@ use crate::define_ogmios_error;
 #[serde(rename_all = "camelCase")]
 pub struct EvaluateRequestParams {
     pub transaction: TxCbor,
-    pub additional_utxo: Vec<Utxo>,
 }
 
 // -----------

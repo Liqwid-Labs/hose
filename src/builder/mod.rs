@@ -1,32 +1,26 @@
 //! High-level transaction builder API
 
 use anyhow::Context;
-use hydrant::primitives::{TxHash, TxOutputPointer};
-use pallas::crypto::hash::Hash;
+use hydrant::UtxoIndexer;
+use hydrant::primitives::TxOutputPointer;
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
-use pallas::network::miniprotocols::localstate::queries_v16::NextEpochChange;
 
-use crate::builder::coin_selection::handle_change;
-use crate::builder::transaction::build_conway::BuildConway as _;
-use crate::builder::transaction::model::{BuiltTransaction, StagingTransaction};
-pub use crate::builder::transaction::model::{Input, Output};
+use crate::ogmios::OgmiosClient;
+use crate::ogmios::pparams::ProtocolParams;
+use crate::primitives::{Hash, Input, Output, ScriptKind, TxHash};
+use crate::wallet::Wallet;
 
 pub mod coin_selection;
 pub mod fee;
-pub mod transaction;
+pub mod tx;
 
-use coin_selection::{get_input_coins, get_output_coins, select_coins};
+use coin_selection::{handle_change, select_coins};
 use fee::calculate_min_fee;
-
-use crate::builder::transaction::model::ScriptKind;
-use crate::ogmios::OgmiosClient;
-use crate::ogmios::pparams::ProtocolParams;
-use crate::wallet::Wallet;
+use tx::{BuiltTransaction, StagingTransaction};
 
 pub struct TxBuilder {
     body: StagingTransaction,
-    network: NetworkId,
     collateral_address: Option<Address>,
     change_address: Option<Address>,
 }
@@ -35,8 +29,7 @@ pub struct TxBuilder {
 impl TxBuilder {
     pub fn new(network: NetworkId) -> Self {
         Self {
-            body: StagingTransaction::new(),
-            network,
+            body: StagingTransaction::new().network_id(network.into()),
             collateral_address: None,
             change_address: None,
         }
@@ -108,24 +101,30 @@ impl TxBuilder {
         self
     }
 
-    fn all_inputs(&self) -> Vec<TxOutputPointer> {
+    fn non_collateral_inputs(&self) -> Vec<TxOutputPointer> {
         self.body
             .inputs
             .iter()
-            .flatten()
-            .chain(self.body.reference_inputs.iter().flatten())
-            .chain(self.body.collateral_inputs.iter().flatten())
-            .cloned()
+            .chain(self.body.reference_inputs.iter())
             .map(Into::into)
             .collect::<Vec<_>>()
     }
 
-    fn requires_collateral(&self) -> bool {
-        // any input comes from a script
-        // any input (including reference) contains a script
-        // any mints
-        // plutus script in witnesses
-        true
+    fn requires_collateral(&self, indexer: &UtxoIndexer) -> anyhow::Result<bool> {
+        // any mints (minting policy) or scripts (inline)
+        if !self.body.mint.is_empty() || !self.body.scripts.is_empty() {
+            return Ok(true);
+        }
+
+        // any input comes from a script or contains a script (validator)
+        let input_utxos = indexer.utxos(&self.non_collateral_inputs())?;
+        if input_utxos.iter().any(|input| {
+            Address::from_bytes(&input.address).unwrap().has_script() || input.script.is_some()
+        }) {
+            return Ok(true);
+        }
+
+        Ok(false)
     }
 
     /// 1. Balance inputs/outputs with fee (estimated on first run, actual on future runs)
@@ -135,37 +134,21 @@ impl TxBuilder {
     /// 5. BUILD
     pub async fn build(
         mut self,
+        indexer: &UtxoIndexer,
         ogmios: &OgmiosClient,
         pparams: &ProtocolParams,
     ) -> anyhow::Result<BuiltTx> {
-        let mut body = self.body.clone();
-
         let change_address = self
             .change_address
             .clone()
-            .context("change address not set")?
-            .to_bech32()
-            .context("invalid change address")?;
+            .context("change address not set")?;
 
-        // TODO: pick collateral input
-        // TODO: minimum output
-        let address_utxos = ogmios
-            .utxos_by_addresses(&[change_address.as_str()])
-            .await?;
+        let address_utxos = indexer.address_utxos(&change_address.to_vec())?;
 
-        let mut fee = calculate_min_fee(ogmios, &self.body, pparams).await;
+        // 1. balance inputs/outputs with fee
+        let mut fee = calculate_min_fee(indexer, ogmios, &self.body, pparams).await;
         loop {
-            let input_coins = get_input_coins(ogmios, &self.all_inputs()).await;
-            let output_coins = get_output_coins(&self.body).await;
-
-            let additional_inputs = select_coins(
-                &address_utxos,
-                &self.all_inputs(),
-                &input_coins,
-                &output_coins,
-                fee,
-            )
-            .await;
+            let additional_inputs = select_coins(pparams, &address_utxos, &self.body, fee).await;
             if additional_inputs.is_empty() {
                 break;
             }
@@ -173,26 +156,43 @@ impl TxBuilder {
                 self.body = self.body.input(input.into());
             }
 
-            fee = calculate_min_fee(ogmios, &self.body, pparams).await;
-            self.body.fee = Some(fee);
+            fee = calculate_min_fee(indexer, ogmios, &self.body, pparams).await;
+            self.body = self.body.fee(fee);
         }
 
-        let input_coins = get_input_coins(ogmios, &self.all_inputs()).await;
-        let output_coins = get_output_coins(&self.body).await;
-
-        let change = handle_change(
+        // 2. add change output
+        // TODO: minimum output
+        if let Some(change_output) = handle_change(
+            indexer,
             self.change_address.as_ref().unwrap(),
-            &input_coins,
-            &output_coins,
+            &self.body,
             fee,
-        );
-        for output in change {
-            self.body = self.body.output(output);
+        )? {
+            self.body = self.body.output(change_output);
         }
 
-        // TODO: handle change address
-        match self.body.clone().build_conway_raw() {
-            Ok(tx) => Ok(BuiltTx::new(self.body, tx, self.network)),
+        // 3. pick collateral input
+        if self.requires_collateral(indexer)? && self.body.collateral_inputs.is_empty() {
+            let required_lovelace = ((fee as f64) * pparams.collateral_percentage).ceil() as u64;
+
+            // TODO: support multiple collateral inputs
+            let mut collateral_utxos = address_utxos
+                .iter()
+                .filter(|utxo| utxo.lovelace > required_lovelace)
+                .collect::<Vec<_>>();
+            collateral_utxos.sort_unstable_by_key(|utxo| utxo.lovelace);
+            let collateral_utxo = *collateral_utxos
+                .first()
+                .context("no utxos large enough for collateral")?;
+            let collateral_utxo_pointer: TxOutputPointer = collateral_utxo.into();
+            self.body = self.body.collateral_input(collateral_utxo_pointer.into());
+
+            // TODO: collateral output
+        }
+
+        // 4. serialize to CBOR
+        match self.body.clone().build_conway() {
+            Ok(tx) => Ok(BuiltTx::new(self.body, tx)),
             Err(e) => Err(anyhow::anyhow!("Failed to build transaction: {}", e)),
         }
     }
@@ -201,16 +201,11 @@ impl TxBuilder {
 pub struct BuiltTx {
     staging: StagingTransaction,
     tx: BuiltTransaction,
-    network: NetworkId,
 }
 
 impl BuiltTx {
-    pub fn new(staging: StagingTransaction, tx: BuiltTransaction, network: NetworkId) -> Self {
-        Self {
-            staging,
-            tx,
-            network,
-        }
+    pub fn new(staging: StagingTransaction, tx: BuiltTransaction) -> Self {
+        Self { staging, tx }
     }
 
     pub fn body(&self) -> &StagingTransaction {
@@ -224,7 +219,7 @@ impl BuiltTx {
     }
 
     pub fn cbor(&self) -> Vec<u8> {
-        self.tx.tx_bytes.0.clone()
+        self.tx.bytes.clone()
     }
 
     pub fn cbor_hex(&self) -> String {
@@ -232,6 +227,6 @@ impl BuiltTx {
     }
 
     pub fn hash(&self) -> anyhow::Result<TxHash> {
-        Ok(self.tx.tx_hash.0.into())
+        Ok(self.tx.hash.0.into())
     }
 }

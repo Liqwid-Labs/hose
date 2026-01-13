@@ -1,16 +1,9 @@
 use std::collections::HashMap;
-use std::iter::Sum;
 use std::ops::Deref;
 use std::str::FromStr as _;
 
-use bip32::secp256k1::sha2::digest::Output;
-use hydrant::primitives::Policy;
 use num::BigRational;
-use serde::de::Unexpected;
 use serde::{Deserialize, Deserializer, Serialize};
-
-use crate::builder::transaction::model::OutputAssets;
-use crate::builder::transaction::{AssetName, Bytes, Hash28, PolicyId};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RpcRequest<T: Serialize> {
@@ -70,6 +63,16 @@ pub struct TxOutputPointer {
 
 impl From<hydrant::primitives::TxOutputPointer> for TxOutputPointer {
     fn from(ptr: hydrant::primitives::TxOutputPointer) -> Self {
+        Self {
+            transaction: TxPointer {
+                id: hex::encode(*ptr.hash),
+            },
+            index: ptr.index as u32,
+        }
+    }
+}
+impl From<&hydrant::primitives::TxOutputPointer> for TxOutputPointer {
+    fn from(ptr: &hydrant::primitives::TxOutputPointer) -> Self {
         Self {
             transaction: TxPointer {
                 id: hex::encode(*ptr.hash),
@@ -243,124 +246,11 @@ pub struct Balance {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Assets(HashMap<String, HashMap<String, u64>>);
 
-impl Into<OutputAssets> for Assets {
-    fn into(self) -> OutputAssets {
-        OutputAssets::from_map(
-            self.0
-                .into_iter()
-                .map(|(policy, assets)| {
-                    let policy = hex::decode(policy).unwrap();
-                    let policy = Hash28(policy.try_into().unwrap());
-                    (
-                        PolicyId::from(policy),
-                        assets
-                            .into_iter()
-                            .map(|(asset, amount)| (Bytes(hex::decode(asset).unwrap()), amount))
-                            .collect::<HashMap<_, _>>(),
-                    )
-                })
-                .collect::<HashMap<_, _>>(),
-        )
-    }
-}
-
-impl Assets {
-    pub fn is_empty(&self) -> bool {
-        self.0
-            .iter()
-            .all(|(_, assets)| assets.iter().all(|(_, amount)| amount == &0))
-    }
-
-    pub fn contained_within(&self, other: &Self) -> bool {
-        self.0.iter().all(|(policy, assets)| {
-            other
-                .0
-                .get(policy)
-                .map(|other_assets| {
-                    assets.iter().all(|(asset, amount)| {
-                        other_assets
-                            .get(asset)
-                            .map(|other_amount| amount <= other_amount)
-                            .unwrap_or(false)
-                    })
-                })
-                .unwrap_or(false)
-        })
-    }
-
-    pub fn saturating_sub(self, other: &Self) -> Self {
-        Self(
-            self.0
-                .iter()
-                .map(|(policy, assets)| {
-                    (
-                        policy.clone(),
-                        assets
-                            .iter()
-                            .map(|(asset, amount)| {
-                                (
-                                    asset.clone(),
-                                    amount.saturating_sub(
-                                        *other
-                                            .get(policy)
-                                            .and_then(|other_assets| other_assets.get(asset))
-                                            .unwrap_or(&0),
-                                    ),
-                                )
-                            })
-                            .collect::<HashMap<_, _>>(),
-                    )
-                })
-                .collect::<HashMap<_, _>>(),
-        )
-    }
-
-    pub fn first_non_zero_asset(&self) -> Option<(String, String, u64)> {
-        self.0.iter().find_map(|(policy, assets)| {
-            assets.iter().find_map(|(asset, amount)| {
-                (*amount > 0).then(|| (policy.clone(), asset.clone(), *amount))
-            })
-        })
-    }
-}
-
 impl Deref for Assets {
     type Target = HashMap<String, HashMap<String, u64>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl Sum for Assets {
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(Assets::default(), |mut acc, assets| {
-            for (policy_id, asset_map) in assets.0.into_iter() {
-                let acc_asset_map = acc.0.entry(policy_id).or_default();
-                for (asset_name, quantity) in asset_map {
-                    *acc_asset_map.entry(asset_name).or_default() += quantity;
-                }
-            }
-            acc
-        })
-    }
-}
-
-impl From<&crate::builder::transaction::model::OutputAssets> for Assets {
-    fn from(map: &crate::builder::transaction::model::OutputAssets) -> Self {
-        Self(
-            map.iter()
-                .map(|(policy_id, asset_map)| {
-                    (
-                        hex::encode(policy_id.0),
-                        asset_map
-                            .iter()
-                            .map(|(asset_name, quantity)| (hex::encode(asset_name), *quantity))
-                            .collect::<HashMap<_, _>>(),
-                    )
-                })
-                .collect::<HashMap<_, _>>(),
-        )
     }
 }
 
