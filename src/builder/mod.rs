@@ -21,6 +21,7 @@ use tx::{BuiltTransaction, StagingTransaction};
 
 pub struct TxBuilder {
     body: StagingTransaction,
+    collateral_output: bool,
     collateral_address: Option<Address>,
     change_address: Option<Address>,
 }
@@ -30,6 +31,7 @@ impl TxBuilder {
     pub fn new(network: NetworkId) -> Self {
         Self {
             body: StagingTransaction::new().network_id(network.into()),
+            collateral_output: false,
             collateral_address: None,
             change_address: None,
         }
@@ -98,6 +100,11 @@ impl TxBuilder {
 
     pub fn change_address(mut self, address: Address) -> Self {
         self.change_address = Some(address);
+        self
+    }
+
+    pub fn use_collateral_output(mut self) -> Self {
+        self.collateral_output = true;
         self
     }
 
@@ -178,7 +185,11 @@ impl TxBuilder {
             // TODO: support multiple collateral inputs
             let mut collateral_utxos = address_utxos
                 .iter()
-                .filter(|utxo| utxo.lovelace > required_lovelace)
+                .filter(|utxo| {
+                    utxo.lovelace > required_lovelace
+                        && utxo.script.is_none()
+                        && utxo.datum_hash.is_none()
+                })
                 .collect::<Vec<_>>();
             collateral_utxos.sort_unstable_by_key(|utxo| utxo.lovelace);
             let collateral_utxo = *collateral_utxos
@@ -187,8 +198,21 @@ impl TxBuilder {
             let collateral_utxo_pointer: TxOutputPointer = collateral_utxo.into();
             self.body = self.body.collateral_input(collateral_utxo_pointer.into());
 
-            // TODO: collateral output
+            if self.collateral_output {
+                // assume a change output of maximum 500 bytes
+                // TODO: technically we should use the actual size of the change output
+                let excess_lovelace = collateral_utxo.lovelace - required_lovelace;
+                let min_lovelace = pparams.min_utxo_deposit_coefficient * 500;
+                if excess_lovelace > min_lovelace {
+                    let change_output = Output::new(change_address.clone(), excess_lovelace)
+                        .add_assets(collateral_utxo.assets.clone());
+                    self.body = self
+                        .body
+                        .output(change_output.expect("failed to create change output"));
+                }
+            }
         }
+        // TODO: update fee
 
         // 4. serialize to CBOR
         match self.body.clone().build_conway() {
