@@ -36,27 +36,33 @@ pub fn get_output_assets(tx: &StagingTransaction) -> Assets {
 }
 
 pub async fn select_coins(
+    indexer: &UtxoIndexer,
     pparams: &ProtocolParams,
     possible_utxos: &[TxOutput],
     tx: &StagingTransaction,
     fee: u64,
-) -> Vec<TxOutput> {
+) -> anyhow::Result<Vec<TxOutput>> {
     let mut selected_utxos = vec![];
 
     // Filter utxos already used as inputs
     // TODO: should also filter out utxos with scripts? utxos with datums?
     let mut possible_utxos = possible_utxos
         .iter()
-        .filter(|utxo| tx.inputs.iter().all(|input| input == *utxo))
+        .filter(|utxo| tx.inputs.iter().all(|input| input != *utxo))
         .collect::<Vec<_>>();
+
+    let input_lovelace = get_input_lovelace(indexer, tx)?;
+    let input_assets = get_input_assets(indexer, tx)?;
 
     // TODO: consider minted assets
 
     // assume a change output of maximum 500 bytes
     // TODO: technically we should use the actual size of the change output
     let min_change_lovelace = pparams.min_utxo_deposit_coefficient * 500;
-    let mut required_lovelace = get_output_lovelace(tx) + fee + min_change_lovelace;
-    let mut required_assets: AssetsDelta = get_output_assets(tx).into();
+    let mut required_lovelace =
+        (get_output_lovelace(tx) + fee + min_change_lovelace).saturating_sub(input_lovelace);
+    let mut required_assets: AssetsDelta =
+        (get_output_assets(tx).saturating_sub(input_assets)).into();
 
     // Select for assets
     while !possible_utxos.is_empty()
@@ -88,7 +94,7 @@ pub async fn select_coins(
         "failed to select coins, wallet doesn't contain enough funds"
     );
 
-    selected_utxos
+    Ok(selected_utxos)
 }
 
 /// Create change output if needed because transaction is not balanced.
