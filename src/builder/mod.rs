@@ -148,7 +148,8 @@ impl TxBuilder {
         // 1. balance inputs/outputs with fee
         let mut fee = calculate_min_fee(indexer, ogmios, &self.body, pparams).await;
         loop {
-            let additional_inputs = select_coins(pparams, &address_utxos, &self.body, fee).await;
+            let additional_inputs =
+                select_coins(indexer, pparams, &address_utxos, &self.body, fee).await?;
             if additional_inputs.is_empty() {
                 break;
             }

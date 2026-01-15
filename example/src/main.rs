@@ -7,11 +7,11 @@ use hose::ogmios::OgmiosClient;
 use hose::ogmios::pparams::ProtocolParams;
 use hose::primitives::Output;
 use hose::wallet::{Wallet, WalletBuilder};
-use hydrant::UtxoIndexer;
+use hydrant::{GenesisConfig, UtxoIndexer};
 use pallas::ledger::addresses::{Address, Network, ShelleyAddress};
 use pallas::ledger::primitives::NetworkId;
 use tokio::signal;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use url::Url;
 
 pub mod config;
@@ -36,14 +36,10 @@ pub async fn main() -> anyhow::Result<()> {
     info!("Starting indexer sync...");
     let indexer = sync_indexer(&config, wallet.address().clone()).await?;
     let indexer = indexer.lock().expect("indexer lock poisoned");
-    println!("Indexer synced");
-
-    let utxos = indexer.address_utxos(&wallet.address().to_vec())?;
-    info!("UTXOs: {:?}", utxos);
 
     let tx = create_collateral_tx(network_id, &wallet, &indexer, &ogmios, &protocol_params).await?;
     let cbor = tx.cbor_hex();
-    info!("CBOR: {:?}", cbor);
+    debug!("CBOR: {}", cbor);
 
     let tx = tx.sign(&wallet)?;
 
@@ -101,25 +97,30 @@ async fn sync_indexer(
         .await
         .expect("failed to connect to node");
 
+    let genesis_config: GenesisConfig = GenesisConfig::new(
+        config.genesis_byron_path.as_ref().map(|p| p.as_path()),
+        config.genesis_shelley_path.as_ref().map(|p| p.as_path()),
+    )?;
+
     // Listen for chain-sync events until shutdown or reached tip
     info!("Starting sync...");
-    let mut sync = hydrant::Sync::new(node, &db, &vec![indexer.clone()])
+    let mut sync = hydrant::Sync::new(node, genesis_config, &db, &vec![indexer.clone()])
         .await
         .expect("failed to start sync");
     let sync_result = tokio::select! {
         res = sync.run_until_synced() => res,
         res = shutdown_signal() => {
             tracing::info!("Received shutdown signal");
+            info!("Stopping sync...");
+            if let Err(error) = sync.stop().await {
+                error!(?error, "Error while writing");
+            }
             res
         }
     };
+
     if let Err(error) = sync_result {
         error!(?error, "Error while syncing");
-    }
-
-    info!("Stopping sync...");
-    if let Err(error) = sync.stop().await {
-        error!(?error, "Error while writing");
     }
 
     info!("Persisting database...");

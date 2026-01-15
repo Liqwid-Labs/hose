@@ -19,6 +19,12 @@ pub struct Config {
 
     #[arg(long, env)]
     pub ogmios_url: String,
+
+    #[arg(long, env)]
+    pub genesis_byron_path: Option<PathBuf>,
+
+    #[arg(long, env)]
+    pub genesis_shelley_path: Option<PathBuf>,
 }
 
 fn parse_network(s: &str) -> Result<Network, String> {

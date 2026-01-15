@@ -14,6 +14,7 @@ anyhow = "1.0"
 clap = { version = "4.5.51", features = ["derive", "env"] }
 dotenv = "0.15.0"
 url = "2.5.7"
+hex = "0.4.3"
 
 hose = { path = ".." }
 hydrant = { git = "https://github.com/liqwid-labs/hydrant" }
