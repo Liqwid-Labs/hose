@@ -1,0 +1,67 @@
+{
+  "activeSlotsCoeff": 1.0,
+  "protocolParams": {
+    "protocolVersion": {
+      "minor": 0,
+      "major": 10
+    },
+    "decentralisationParam": 1,
+    "eMax": 18,
+    "extraEntropy": {
+      "tag": "NeutralNonce"
+    },
+    "maxTxSize": 16384,
+    "maxBlockBodySize": 65536,
+    "maxBlockHeaderSize": 1100,
+    "minFeeA": 44,
+    "minFeeB": 155381,
+    "minUTxOValue": 1000000,
+    "poolDeposit": 500000000,
+    "minPoolCost": 340000000,
+    "keyDeposit": 2000000,
+    "nOpt": 150,
+    "rho": 0.003,
+    "tau": 0.2,
+    "a0": 0.3
+  },
+  "genDelegs": {},
+  "updateQuorum": 5,
+  "networkId": "Testnet",
+  "initialFunds": {
+    "00813c32c92aad21770ff8001de0918f598df8c06775f77f8e8839d2a0074a515f7f32bf31a4f41c7417a8136e8152bfb42f06d71b389a6896": 900000000000,
+    "609783be7d3c54f11377966dfabc9284cd6c32fca1cd42ef0a4f1cc45b": 900000000000,
+    "609783be7d3c54f11377966dfabc9284cd6c32fca1cd42ef0a4f1cc45b": 1000000000000000000,
+    "606794f49f9422541d53b7bf9139e96c82e674866f105edd02df907c54": 1000000000000000000
+  },
+  "maxLovelaceSupply": 45000000000000000,
+  "networkMagic": 5,
+  "epochLength": 10,
+  "staking": {
+    "pools": {
+      "8a219b698d3b6e034391ae84cee62f1d76b6fbc45ddfe4e31e0d4b60": {
+        "cost": 0,
+        "margin": 0.0,
+        "metadata": null,
+        "owners": [],
+        "pledge": 0,
+        "publicKey": "8a219b698d3b6e034391ae84cee62f1d76b6fbc45ddfe4e31e0d4b60",
+        "relays": [],
+        "rewardAccount": {
+          "credential": {
+            "key hash": "b6ffb20cf821f9286802235841d4348a2c2bafd4f73092b7de6655ea"
+          },
+          "network": "Testnet"
+        },
+        "vrf": "fec17ed60cbf2ec5be3f061fb4de0b6ef1f20947cfbfce5fb2783d12f3f69ff5"
+      }
+    },
+    "stake": {
+      "074a515f7f32bf31a4f41c7417a8136e8152bfb42f06d71b389a6896": "8a219b698d3b6e034391ae84cee62f1d76b6fbc45ddfe4e31e0d4b60"
+    }
+  },
+  "systemStart": "2017-09-23T21:44:51Z",
+  "slotsPerKESPeriod": 129600,
+  "slotLength": 0.1,
+  "maxKESEvolutions": 62,
+  "securityParam": 2160
+}

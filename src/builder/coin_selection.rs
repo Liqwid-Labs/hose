@@ -1,14 +1,20 @@
 use std::cmp::Reverse;
+use std::sync::Arc;
 
 use hydrant::UtxoIndexer;
 use hydrant::primitives::{AssetsDelta, TxOutput};
 use pallas::ledger::addresses::Address as PallasAddress;
+use tokio::sync::Mutex;
 
 use crate::builder::{Output, StagingTransaction};
 use crate::ogmios::pparams::ProtocolParams;
 use crate::primitives::Assets;
 
-pub fn get_input_lovelace(indexer: &UtxoIndexer, tx: &StagingTransaction) -> anyhow::Result<u64> {
+pub async fn get_input_lovelace(
+    indexer: Arc<Mutex<UtxoIndexer>>,
+    tx: &StagingTransaction,
+) -> anyhow::Result<u64> {
+    let indexer = indexer.lock().await;
     Ok(indexer
         .utxos(&tx.inputs)?
         .iter()
@@ -16,7 +22,11 @@ pub fn get_input_lovelace(indexer: &UtxoIndexer, tx: &StagingTransaction) -> any
         .sum())
 }
 
-pub fn get_input_assets(indexer: &UtxoIndexer, tx: &StagingTransaction) -> anyhow::Result<Assets> {
+pub async fn get_input_assets(
+    indexer: Arc<Mutex<UtxoIndexer>>,
+    tx: &StagingTransaction,
+) -> anyhow::Result<Assets> {
+    let indexer = indexer.lock().await;
     Ok(indexer
         .utxos(&tx.inputs)?
         .iter()
@@ -36,6 +46,8 @@ pub fn get_output_assets(tx: &StagingTransaction) -> Assets {
 }
 
 pub async fn select_coins(
+    input_lovelace: u64,
+    input_assets: Assets,
     pparams: &ProtocolParams,
     possible_utxos: &[TxOutput],
     tx: &StagingTransaction,
@@ -47,7 +59,7 @@ pub async fn select_coins(
     // TODO: should also filter out utxos with scripts? utxos with datums?
     let mut possible_utxos = possible_utxos
         .iter()
-        .filter(|utxo| tx.inputs.iter().all(|input| input == *utxo))
+        .filter(|utxo| !tx.inputs.iter().any(|input| input == *utxo))
         .collect::<Vec<_>>();
 
     // TODO: consider minted assets
@@ -55,8 +67,10 @@ pub async fn select_coins(
     // assume a change output of maximum 500 bytes
     // TODO: technically we should use the actual size of the change output
     let min_change_lovelace = pparams.min_utxo_deposit_coefficient * 500;
-    let mut required_lovelace = get_output_lovelace(tx) + fee + min_change_lovelace;
-    let mut required_assets: AssetsDelta = get_output_assets(tx).into();
+    let mut required_lovelace =
+        (get_output_lovelace(tx) + fee + min_change_lovelace).saturating_sub(input_lovelace);
+    let mut required_assets: AssetsDelta =
+        get_output_assets(tx).saturating_sub(input_assets).into();
 
     // Select for assets
     while !possible_utxos.is_empty()
@@ -92,20 +106,20 @@ pub async fn select_coins(
 }
 
 /// Create change output if needed because transaction is not balanced.
-pub fn handle_change(
-    indexer: &UtxoIndexer,
+pub async fn handle_change(
+    indexer: Arc<Mutex<UtxoIndexer>>,
     change_address: &PallasAddress,
     tx: &StagingTransaction,
     fee: u64,
 ) -> anyhow::Result<Option<Output>> {
     // TODO: consider minted assets
-    let input_lovelace = get_input_lovelace(indexer, tx)?;
+    let input_lovelace = get_input_lovelace(indexer.clone(), tx).await?;
     let output_lovelace = get_output_lovelace(tx);
     let change_lovelace = input_lovelace
         .saturating_sub(output_lovelace)
         .saturating_sub(fee);
 
-    let input_assets: AssetsDelta = get_input_assets(indexer, tx)?.into();
+    let input_assets: AssetsDelta = get_input_assets(indexer, tx).await?.into();
     let output_assets: AssetsDelta = get_output_assets(tx).into();
     let change_assets = input_assets - output_assets;
 
