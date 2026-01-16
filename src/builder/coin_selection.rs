@@ -1,14 +1,20 @@
 use std::cmp::Reverse;
+use std::sync::Arc;
 
 use hydrant::UtxoIndexer;
 use hydrant::primitives::{AssetsDelta, TxOutput};
 use pallas::ledger::addresses::Address as PallasAddress;
+use tokio::sync::Mutex;
 
 use crate::builder::{Output, StagingTransaction};
 use crate::ogmios::pparams::ProtocolParams;
 use crate::primitives::Assets;
 
-pub fn get_input_lovelace(indexer: &UtxoIndexer, tx: &StagingTransaction) -> anyhow::Result<u64> {
+pub async fn get_input_lovelace(
+    indexer: Arc<Mutex<UtxoIndexer>>,
+    tx: &StagingTransaction,
+) -> anyhow::Result<u64> {
+    let indexer = indexer.lock().await;
     Ok(indexer
         .utxos(&tx.inputs)?
         .iter()
@@ -16,7 +22,11 @@ pub fn get_input_lovelace(indexer: &UtxoIndexer, tx: &StagingTransaction) -> any
         .sum())
 }
 
-pub fn get_input_assets(indexer: &UtxoIndexer, tx: &StagingTransaction) -> anyhow::Result<Assets> {
+pub async fn get_input_assets(
+    indexer: Arc<Mutex<UtxoIndexer>>,
+    tx: &StagingTransaction,
+) -> anyhow::Result<Assets> {
+    let indexer = indexer.lock().await;
     Ok(indexer
         .utxos(&tx.inputs)?
         .iter()
@@ -96,20 +106,20 @@ pub async fn select_coins(
 }
 
 /// Create change output if needed because transaction is not balanced.
-pub fn handle_change(
-    indexer: &UtxoIndexer,
+pub async fn handle_change(
+    indexer: Arc<Mutex<UtxoIndexer>>,
     change_address: &PallasAddress,
     tx: &StagingTransaction,
     fee: u64,
 ) -> anyhow::Result<Option<Output>> {
     // TODO: consider minted assets
-    let input_lovelace = get_input_lovelace(indexer, tx)?;
+    let input_lovelace = get_input_lovelace(indexer.clone(), tx).await?;
     let output_lovelace = get_output_lovelace(tx);
     let change_lovelace = input_lovelace
         .saturating_sub(output_lovelace)
         .saturating_sub(fee);
 
-    let input_assets: AssetsDelta = get_input_assets(indexer, tx)?.into();
+    let input_assets: AssetsDelta = get_input_assets(indexer, tx).await?.into();
     let output_assets: AssetsDelta = get_output_assets(tx).into();
     let change_assets = input_assets - output_assets;
 

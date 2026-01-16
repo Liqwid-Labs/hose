@@ -33,7 +33,7 @@ pub async fn wait_until_utxo_exists(
         if utxo_exists {
             return Ok(());
         }
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
     }
 }
 

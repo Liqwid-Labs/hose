@@ -1,10 +1,13 @@
 //! High-level transaction builder API
 
+use std::sync::Arc;
+
 use anyhow::Context;
 use hydrant::UtxoIndexer;
 use hydrant::primitives::TxOutputPointer;
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
+use tokio::sync::Mutex;
 
 use crate::builder::coin_selection::{get_input_assets, get_input_lovelace};
 use crate::ogmios::OgmiosClient;
@@ -111,14 +114,17 @@ impl TxBuilder {
             .collect::<Vec<_>>()
     }
 
-    fn requires_collateral(&self, indexer: &UtxoIndexer) -> anyhow::Result<bool> {
+    async fn requires_collateral(&self, indexer: Arc<Mutex<UtxoIndexer>>) -> anyhow::Result<bool> {
         // any mints (minting policy) or scripts (inline)
         if !self.body.mint.is_empty() || !self.body.scripts.is_empty() {
             return Ok(true);
         }
 
         // any input comes from a script or contains a script (validator)
-        let input_utxos = indexer.utxos(&self.non_collateral_inputs())?;
+        let input_utxos = {
+            let indexer = indexer.lock().await;
+            indexer.utxos(&self.non_collateral_inputs())?
+        };
         if input_utxos.iter().any(|input| {
             Address::from_bytes(&input.address).unwrap().has_script() || input.script.is_some()
         }) {
@@ -135,7 +141,7 @@ impl TxBuilder {
     /// 5. BUILD
     pub async fn build(
         mut self,
-        indexer: &UtxoIndexer,
+        indexer: Arc<Mutex<UtxoIndexer>>,
         ogmios: &OgmiosClient,
         pparams: &ProtocolParams,
     ) -> anyhow::Result<BuiltTx> {
@@ -144,13 +150,16 @@ impl TxBuilder {
             .clone()
             .context("change address not set")?;
 
-        let address_utxos = indexer.address_utxos(&change_address.to_vec())?;
+        let address_utxos = {
+            let indexer = indexer.lock().await;
+            indexer.address_utxos(&change_address.to_vec())?
+        };
 
         // 1. balance inputs/outputs with fee
-        let mut fee = calculate_min_fee(indexer, ogmios, &self.body, pparams).await;
+        let mut fee = calculate_min_fee(indexer.clone(), ogmios, &self.body, pparams).await;
         loop {
-            let input_lovelace = get_input_lovelace(indexer, &self.body)?;
-            let input_assets = get_input_assets(indexer, &self.body)?;
+            let input_lovelace = get_input_lovelace(indexer.clone(), &self.body).await?;
+            let input_assets = get_input_assets(indexer.clone(), &self.body).await?;
             let additional_inputs = select_coins(
                 input_lovelace,
                 input_assets,
@@ -162,7 +171,7 @@ impl TxBuilder {
             .await;
             if additional_inputs.is_empty() {
                 // No need to add more inputs, but we still need to recalculate the fee
-                fee = calculate_min_fee(indexer, ogmios, &self.body, pparams).await;
+                fee = calculate_min_fee(indexer.clone(), ogmios, &self.body, pparams).await;
                 self.body.fee = Some(fee);
                 break;
             }
@@ -170,23 +179,27 @@ impl TxBuilder {
                 self.body = self.body.input(input.into());
             }
 
-            fee = calculate_min_fee(indexer, ogmios, &self.body, pparams).await;
+            fee = calculate_min_fee(indexer.clone(), ogmios, &self.body, pparams).await;
             self.body = self.body.fee(fee);
         }
 
         // 2. add change output
         // TODO: minimum output
         if let Some(change_output) = handle_change(
-            indexer,
+            indexer.clone(),
             self.change_address.as_ref().unwrap(),
             &self.body,
             fee,
-        )? {
+        )
+        .await?
+        {
             self.body = self.body.output(change_output);
         }
 
         // 3. pick collateral input
-        if self.requires_collateral(indexer)? && self.body.collateral_inputs.is_empty() {
+        if self.requires_collateral(indexer.clone()).await?
+            && self.body.collateral_inputs.is_empty()
+        {
             let required_lovelace = ((fee as f64) * pparams.collateral_percentage).ceil() as u64;
 
             // TODO: support multiple collateral inputs

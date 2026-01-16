@@ -37,13 +37,22 @@ pub async fn main() -> anyhow::Result<()> {
 
     info!("Starting indexer sync...");
     let indexer = sync_indexer(&config, wallet.address().clone()).await?;
-    let indexer = indexer.lock().await;
     println!("Indexer synced");
 
-    let utxos = indexer.address_utxos(&wallet.address().to_vec())?;
+    let utxos = {
+        let indexer = indexer.lock().await;
+        indexer.address_utxos(&wallet.address().to_vec())?
+    };
     info!("UTXOs: {:?}", utxos);
 
-    let tx = create_collateral_tx(network_id, &wallet, &indexer, &ogmios, &protocol_params).await?;
+    let tx = create_collateral_tx(
+        network_id,
+        &wallet,
+        indexer.clone(),
+        &ogmios,
+        &protocol_params,
+    )
+    .await?;
     let cbor = tx.cbor_hex();
     info!("CBOR: {:?}", cbor);
 
@@ -59,7 +68,7 @@ pub async fn main() -> anyhow::Result<()> {
 async fn create_collateral_tx(
     network_id: NetworkId,
     wallet: &Wallet,
-    indexer: &UtxoIndexer,
+    indexer: Arc<Mutex<UtxoIndexer>>,
     ogmios: &OgmiosClient,
     protocol_params: &ProtocolParams,
 ) -> anyhow::Result<BuiltTx> {
@@ -71,7 +80,7 @@ async fn create_collateral_tx(
             Address::Shelley(wallet.address().clone()),
             collateral_size,
         ))
-        .build(indexer, ogmios, protocol_params)
+        .build(indexer.clone(), ogmios, protocol_params)
         .await?;
 
     Ok(tx)

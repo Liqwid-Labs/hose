@@ -56,8 +56,6 @@ mod test {
     async fn basic_tx(context: &mut DevnetContext) -> anyhow::Result<()> {
         let _lock = TestLock::wait_and_lock().await;
 
-        let indexer = context.indexer.lock().await;
-
         let change_address = context.wallet.address().clone();
         let tx = TxBuilder::new(context.network_id)
             .change_address(Address::Shelley(change_address))
@@ -65,7 +63,11 @@ mod test {
                 Address::Shelley(context.wallet.address().clone()),
                 10_000_000,
             ))
-            .build(&indexer, &context.ogmios, &context.protocol_params)
+            .build(
+                context.indexer.clone(),
+                &context.ogmios,
+                &context.protocol_params,
+            )
             .await?;
 
         let (_signed, _res) = sign_and_submit_tx(context, tx).await?;
@@ -78,8 +80,6 @@ mod test {
     async fn utxo_with_datum(context: &mut DevnetContext) -> anyhow::Result<()> {
         let _lock = TestLock::wait_and_lock().await;
 
-        let indexer = context.indexer.lock().await;
-
         let change_address = context.wallet.address().clone();
         let cbor = minicbor::to_vec(42)?;
         let tx = TxBuilder::new(context.network_id)
@@ -91,7 +91,11 @@ mod test {
                 )
                 .set_datum(cbor),
             )
-            .build(&indexer, &context.ogmios, &context.protocol_params)
+            .build(
+                context.indexer.clone(),
+                &context.ogmios,
+                &context.protocol_params,
+            )
             .await?;
 
         let cbor_hex = tx.cbor_hex();
@@ -108,8 +112,6 @@ mod test {
 
         let change_address = context.wallet.address().clone();
 
-        let indexer = context.indexer.lock().await;
-
         let (_signed_tx, output_pointer) = {
             let tx = TxBuilder::new(context.network_id)
                 .change_address(Address::Shelley(change_address.clone()))
@@ -117,7 +119,11 @@ mod test {
                     Address::Shelley(context.wallet.address().clone()),
                     42_000_000,
                 ))
-                .build(&indexer, &context.ogmios, &context.protocol_params)
+                .build(
+                    context.indexer.clone(),
+                    &context.ogmios,
+                    &context.protocol_params,
+                )
                 .await?;
 
             let (signed, _res) = sign_and_submit_tx(context, tx).await?;
@@ -143,7 +149,11 @@ mod test {
             let tx = TxBuilder::new(context.network_id)
                 .change_address(Address::Shelley(change_address.clone()))
                 .add_input(output_pointer.into())
-                .build(&indexer, &context.ogmios, &context.protocol_params)
+                .build(
+                    context.indexer.clone(),
+                    &context.ogmios,
+                    &context.protocol_params,
+                )
                 .await?;
 
             sign_and_submit_tx(context, tx).await?

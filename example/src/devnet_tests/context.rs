@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 
 use anyhow::Context as _;
 use clap::Parser as _;
@@ -9,6 +10,10 @@ use hydrant::UtxoIndexer;
 use pallas::ledger::primitives::NetworkId;
 use test_context::AsyncTestContext;
 use tokio::sync::Mutex;
+use tokio_blocked::TokioBlockedLayer;
+use tracing_subscriber::layer::SubscriberExt as _;
+use tracing_subscriber::util::SubscriberInitExt as _;
+use tracing_subscriber::{EnvFilter, Layer};
 use url::Url;
 
 use crate::config::{self, Config};
@@ -30,7 +35,19 @@ impl AsyncTestContext for DevnetContext {
     async fn setup() -> Self {
         let _lock = TestLock::wait_and_lock().await;
 
-        match tracing_subscriber::fmt::try_init() {
+        let fmt = tracing_subscriber::fmt::layer().with_filter(EnvFilter::from_default_env());
+
+        let blocked =
+            TokioBlockedLayer::new().with_warn_busy_single_poll(Some(Duration::from_micros(150)));
+
+        let console = console_subscriber::spawn();
+
+        let sub = tracing_subscriber::registry()
+            .with(fmt)
+            .with(blocked)
+            .with(console);
+
+        match sub.try_init() {
             Ok(_) => (),
             Err(e) => {
                 // Ignore error, tracing probably is already initialized
