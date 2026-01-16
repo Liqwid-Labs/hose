@@ -36,10 +36,12 @@ mod test {
         tx: BuiltTx,
     ) -> anyhow::Result<(BuiltTx, SubmitResult)> {
         let signed = tx.sign(&context.wallet)?;
+        info!("Submitting transaction: {}", signed.hash()?);
         match context.ogmios.submit(&signed.cbor()).await {
             Ok(res) => {
                 debug!("Submitted transaction: {:?}", res.transaction.id);
                 assert_eq!(res.transaction.id, signed.hash()?.to_string());
+                util::wait_until_tx_is_included(context, signed.hash()?).await?;
                 Ok((signed, res))
             }
             Err(e) => {
@@ -52,7 +54,7 @@ mod test {
     #[test_context(DevnetContext)]
     #[tokio::test]
     async fn basic_tx(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let _lock = TestLock::wait_and_lock();
+        let _lock = TestLock::wait_and_lock().await;
 
         let indexer = context.indexer.lock().await;
 
@@ -74,7 +76,7 @@ mod test {
     #[test_context(DevnetContext)]
     #[tokio::test]
     async fn utxo_with_datum(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let _lock = TestLock::wait_and_lock();
+        let _lock = TestLock::wait_and_lock().await;
 
         let indexer = context.indexer.lock().await;
 
@@ -102,7 +104,7 @@ mod test {
     #[test_context(DevnetContext)]
     #[tokio::test]
     async fn spend_specific_output(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let _lock = TestLock::wait_and_lock();
+        let _lock = TestLock::wait_and_lock().await;
 
         let change_address = context.wallet.address().clone();
 
@@ -133,7 +135,7 @@ mod test {
                     output_idx as u64,
                 );
 
-            util::wait_n_slots(context, 1).await?;
+            util::wait_until_utxo_exists(context, output_pointer.clone()).await?;
             (signed, output_pointer)
         };
 

@@ -28,7 +28,7 @@ pub struct DevnetContext {
 
 impl AsyncTestContext for DevnetContext {
     async fn setup() -> Self {
-        let _lock = TestLock::wait_and_lock();
+        let _lock = TestLock::wait_and_lock().await;
 
         match tracing_subscriber::fmt::try_init() {
             Ok(_) => (),

@@ -2,7 +2,7 @@ use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use hydrant::{GenesisConfig, UtxoIndexer};
+use hydrant::{GenesisConfig, Indexer, UtxoIndexer};
 use pallas::ledger::addresses::{Network, ShelleyAddress};
 use tokio::signal;
 use tokio::sync::{Mutex, MutexGuard};
@@ -32,14 +32,11 @@ impl IndexerContext {
         };
 
         if needs_init {
-            let (indexer, sync_handle) = sync_indexer(config, address).await?;
+            let ctx = sync_indexer(config, address).await?;
             let mut context = INDEXER_CONTEXT.lock().await;
             // Double-check pattern: another thread might have initialized it
             if context.is_none() {
-                *context = Some(IndexerContext {
-                    indexer,
-                    _sync_handle: sync_handle,
-                });
+                *context = Some(ctx);
             }
         }
 
@@ -56,7 +53,7 @@ impl IndexerContext {
 pub async fn sync_indexer(
     config: &config::Config,
     address: ShelleyAddress,
-) -> anyhow::Result<(Arc<Mutex<UtxoIndexer>>, JoinHandle<()>)> {
+) -> anyhow::Result<IndexerContext> {
     fn get_magic(network: Network) -> u64 {
         match network {
             Network::Testnet => 5,
@@ -93,12 +90,22 @@ pub async fn sync_indexer(
 
     info!("Starting background sync...");
     let sync_handle = tokio::task::spawn(async move {
-        if let Err(error) = sync.run().await {
-            error!(?error, "Error while syncing to tip");
+        loop {
+            info!("Syncing to tip...");
+            if let Err(error) = sync.run_until_synced().await {
+                error!(?error, "Error while syncing to tip");
+            }
+            info!("Persisting database...");
+            tokio::time::sleep(Duration::from_millis(1)).await;
+            if let Err(error) = db.persist() {
+                error!(?error, "Error while persisting database");
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        db.persist().expect("failed to persist database");
-        warn!("Sync handle finished.");
     });
 
-    Ok((indexer, sync_handle))
+    Ok(IndexerContext {
+        indexer,
+        _sync_handle: sync_handle,
+    })
 }

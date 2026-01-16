@@ -904,6 +904,7 @@ dependencies = [
  "anyhow",
  "clap",
  "dotenv",
+ "hex",
  "hose",
  "hydrant",
  "minicbor 2.1.3",
