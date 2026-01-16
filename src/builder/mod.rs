@@ -6,6 +6,7 @@ use hydrant::primitives::TxOutputPointer;
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
 
+use crate::builder::coin_selection::{get_input_assets, get_input_lovelace};
 use crate::ogmios::OgmiosClient;
 use crate::ogmios::pparams::ProtocolParams;
 use crate::primitives::{Hash, Input, Output, ScriptKind, TxHash};
@@ -148,10 +149,20 @@ impl TxBuilder {
         // 1. balance inputs/outputs with fee
         let mut fee = calculate_min_fee(indexer, ogmios, &self.body, pparams).await;
         loop {
-            let additional_inputs = select_coins(pparams, &address_utxos, &self.body, fee).await;
+            let input_lovelace = get_input_lovelace(indexer, &self.body)?;
+            let input_assets = get_input_assets(indexer, &self.body)?;
+            let additional_inputs = select_coins(
+                input_lovelace,
+                input_assets,
+                pparams,
+                &address_utxos,
+                &self.body,
+                fee,
+            )
+            .await;
             if additional_inputs.is_empty() {
                 // No need to add more inputs, but we still need to recalculate the fee
-                fee = calculate_min_fee(ogmios, &self.body, pparams).await;
+                fee = calculate_min_fee(indexer, ogmios, &self.body, pparams).await;
                 self.body.fee = Some(fee);
                 break;
             }

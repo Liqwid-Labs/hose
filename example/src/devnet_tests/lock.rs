@@ -6,10 +6,12 @@ use std::thread;
 /// spend the same UTxO at the same time.
 pub struct TestLock<'a>(&'a AtomicBool);
 
+static LOCK: AtomicBool = AtomicBool::new(false);
+
 impl<'a> TestLock<'a> {
     /// Wait for the lock to be available and then lock it.
-    pub fn wait_and_lock(lock: &'a AtomicBool) -> Self {
-        while lock
+    pub fn wait_and_lock() -> TestLock<'a> {
+        while LOCK
             .compare_exchange_weak(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
         {
@@ -19,7 +21,7 @@ impl<'a> TestLock<'a> {
         // Sleep a full slot in devnet context
         std::thread::sleep(std::time::Duration::from_millis(100));
 
-        Self(lock)
+        Self(&LOCK)
     }
 }
 

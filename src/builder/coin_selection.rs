@@ -36,6 +36,8 @@ pub fn get_output_assets(tx: &StagingTransaction) -> Assets {
 }
 
 pub async fn select_coins(
+    input_lovelace: u64,
+    input_assets: Assets,
     pparams: &ProtocolParams,
     possible_utxos: &[TxOutput],
     tx: &StagingTransaction,
@@ -47,7 +49,7 @@ pub async fn select_coins(
     // TODO: should also filter out utxos with scripts? utxos with datums?
     let mut possible_utxos = possible_utxos
         .iter()
-        .filter(|utxo| tx.inputs.iter().all(|input| input == *utxo))
+        .filter(|utxo| !tx.inputs.iter().any(|input| input == *utxo))
         .collect::<Vec<_>>();
 
     // TODO: consider minted assets
@@ -55,8 +57,10 @@ pub async fn select_coins(
     // assume a change output of maximum 500 bytes
     // TODO: technically we should use the actual size of the change output
     let min_change_lovelace = pparams.min_utxo_deposit_coefficient * 500;
-    let mut required_lovelace = get_output_lovelace(tx) + fee + min_change_lovelace;
-    let mut required_assets: AssetsDelta = get_output_assets(tx).into();
+    let mut required_lovelace =
+        (get_output_lovelace(tx) + fee + min_change_lovelace).saturating_sub(input_lovelace);
+    let mut required_assets: AssetsDelta =
+        get_output_assets(tx).saturating_sub(input_assets).into();
 
     // Select for assets
     while !possible_utxos.is_empty()

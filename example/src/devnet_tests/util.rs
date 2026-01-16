@@ -1,6 +1,6 @@
-use crate::devnet_tests::test::DevnetContext;
+use crate::devnet_tests::context::DevnetContext;
 
-pub async fn wait_n_slots(context: &mut DevnetContext, n: u64) -> anyhow::Result<()> {
+pub async fn wait_n_slots(_context: &DevnetContext, n: u64) -> anyhow::Result<()> {
     // TODO: Use ogmios API to check slots
 
     // Currently, we just wait N * 100ms
