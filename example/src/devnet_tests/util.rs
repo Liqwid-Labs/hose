@@ -19,7 +19,7 @@ pub async fn wait_until_utxo_exists(
     output_pointer: TxOutputPointer,
 ) -> anyhow::Result<()> {
     loop {
-        context.sync.next_block_at_tip().await?;
+        context.sync.run_until_synced().await?;
         info!(
             "Waiting for utxo to exist: {}#{}",
             hex::encode(output_pointer.hash.as_ref()),

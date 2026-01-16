@@ -26,3 +26,4 @@ minicbor = { version = "2.1.3", features = ["alloc"] }
 hose = { path = ".." }
 hydrant = { git = "https://github.com/liqwid-labs/hydrant" }
 pallas = { git = "https://github.com/txpipe/pallas", features = ["unstable"] }
+serial_test = "3.3.1"

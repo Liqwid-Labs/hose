@@ -9,7 +9,7 @@ use hydrant::{Sync, UtxoIndexer};
 use pallas::ledger::addresses::Network;
 use pallas::ledger::primitives::NetworkId;
 use pallas::network::facades::PeerClient;
-use tokio::sync::{Mutex, OnceCell};
+use tokio::sync::Mutex;
 use tokio_blocked::TokioBlockedLayer;
 use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
@@ -17,8 +17,6 @@ use tracing_subscriber::{EnvFilter, Layer};
 use url::Url;
 
 use crate::config::{self, Config};
-
-static DEVNET_CONTEXT: OnceCell<Mutex<DevnetContext>> = OnceCell::const_new();
 
 pub struct DevnetContext {
     pub config: Config,
@@ -31,12 +29,6 @@ pub struct DevnetContext {
 }
 
 impl DevnetContext {
-    pub async fn get() -> &'static Mutex<DevnetContext> {
-        DEVNET_CONTEXT
-            .get_or_init(|| async { Mutex::new(Self::new().await) })
-            .await
-    }
-
     pub async fn new() -> Self {
         dotenv::dotenv()
             .context("could not load .env file")
@@ -90,12 +82,11 @@ fn init_tracing() {
     let blocked =
         TokioBlockedLayer::new().with_warn_busy_single_poll(Some(Duration::from_micros(150)));
     let console = console_subscriber::spawn();
-    tracing_subscriber::registry()
+    let _ = tracing_subscriber::registry()
         .with(fmt)
         .with(blocked)
         .with(console)
-        .try_init()
-        .expect("failed to init tracing");
+        .try_init();
 }
 
 fn get_magic(network: Network) -> u64 {

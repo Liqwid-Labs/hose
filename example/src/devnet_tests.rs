@@ -12,6 +12,7 @@ mod test {
     use hose::ogmios::submit::SubmitResult;
     use hose::primitives::Output;
     use pallas::ledger::addresses::Address;
+    use serial_test::serial;
     use tracing::{debug, info};
 
     use crate::devnet_tests::context::DevnetContext;
@@ -37,13 +38,11 @@ mod test {
         }
     }
 
+    #[serial]
     #[tokio::test]
     async fn basic_tx() -> anyhow::Result<()> {
-        let context = DevnetContext::get().await;
-        let mut context = context.lock().await;
-        if let Err(e) = context.sync.run_until_synced().await {
-            panic!("Failed to sync: {:?}", e);
-        }
+        let mut context = DevnetContext::new().await;
+        context.sync.run_until_synced().await?;
 
         let change_address = context.wallet.address().clone();
         let tx = TxBuilder::new(context.network_id)
@@ -61,16 +60,16 @@ mod test {
 
         let (_signed, _res) = sign_and_submit_tx(&mut context, tx).await?;
 
+        context.sync.stop().await?;
+
         Ok(())
     }
 
+    #[serial]
     #[tokio::test]
     async fn utxo_with_datum() -> anyhow::Result<()> {
-        let context = DevnetContext::get().await;
-        let mut context = context.lock().await;
-        if let Err(e) = context.sync.run_until_synced().await {
-            panic!("Failed to sync: {:?}", e);
-        }
+        let mut context = DevnetContext::new().await;
+        context.sync.run_until_synced().await?;
 
         let change_address = context.wallet.address().clone();
         let cbor = minicbor::to_vec(42)?;
@@ -94,16 +93,16 @@ mod test {
 
         let (_signed, _res) = sign_and_submit_tx(&mut context, tx).await?;
 
+        context.sync.stop().await?;
+
         Ok(())
     }
 
+    #[serial]
     #[tokio::test]
     async fn spend_specific_output() -> anyhow::Result<()> {
-        let context = DevnetContext::get().await;
-        let mut context = context.lock().await;
-        if let Err(e) = context.sync.run_until_synced().await {
-            panic!("Failed to sync: {:?}", e);
-        }
+        let mut context = DevnetContext::new().await;
+        context.sync.run_until_synced().await?;
 
         let change_address = context.wallet.address().clone();
 
@@ -153,6 +152,8 @@ mod test {
 
             sign_and_submit_tx(&mut context, tx).await?
         };
+
+        context.sync.stop().await?;
 
         Ok(())
     }
