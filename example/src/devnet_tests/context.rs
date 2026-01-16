@@ -1,15 +1,15 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use anyhow::Context as _;
 use clap::Parser as _;
 use hose::ogmios::OgmiosClient;
 use hose::wallet::{Wallet, WalletBuilder};
-use hydrant::UtxoIndexer;
+use hydrant::{Sync, UtxoIndexer};
+use pallas::ledger::addresses::Network;
 use pallas::ledger::primitives::NetworkId;
-use test_context::AsyncTestContext;
-use tokio::sync::Mutex;
+use pallas::network::facades::PeerClient;
+use tokio::sync::{Mutex, OnceCell};
 use tokio_blocked::TokioBlockedLayer;
 use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
@@ -17,10 +17,8 @@ use tracing_subscriber::{EnvFilter, Layer};
 use url::Url;
 
 use crate::config::{self, Config};
-use crate::devnet_tests::indexer::IndexerContext;
-use crate::devnet_tests::lock::TestLock;
 
-static LOCK: AtomicBool = AtomicBool::new(false);
+static DEVNET_CONTEXT: OnceCell<Mutex<DevnetContext>> = OnceCell::const_new();
 
 pub struct DevnetContext {
     pub config: Config,
@@ -28,35 +26,22 @@ pub struct DevnetContext {
     pub ogmios: OgmiosClient,
     pub protocol_params: hose::ogmios::pparams::ProtocolParams,
     pub wallet: Wallet,
+    pub sync: Sync,
     pub indexer: Arc<Mutex<UtxoIndexer>>,
 }
 
-impl AsyncTestContext for DevnetContext {
-    async fn setup() -> Self {
-        let _lock = TestLock::wait_and_lock().await;
+impl DevnetContext {
+    pub async fn get() -> &'static Mutex<DevnetContext> {
+        DEVNET_CONTEXT
+            .get_or_init(|| async { Mutex::new(Self::new().await) })
+            .await
+    }
 
-        let fmt = tracing_subscriber::fmt::layer().with_filter(EnvFilter::from_default_env());
-
-        let blocked =
-            TokioBlockedLayer::new().with_warn_busy_single_poll(Some(Duration::from_micros(150)));
-
-        let console = console_subscriber::spawn();
-
-        let sub = tracing_subscriber::registry()
-            .with(fmt)
-            .with(blocked)
-            .with(console);
-
-        match sub.try_init() {
-            Ok(_) => (),
-            Err(e) => {
-                // Ignore error, tracing probably is already initialized
-                // TODO: Could we catch this better?
-            }
-        }
+    pub async fn new() -> Self {
         dotenv::dotenv()
             .context("could not load .env file")
             .unwrap();
+        init_tracing();
 
         let config = config::Config::parse();
         let network_id = NetworkId::try_from(config.network.value())
@@ -66,13 +51,27 @@ impl AsyncTestContext for DevnetContext {
 
         let protocol_params = ogmios.protocol_params().await.unwrap();
 
-        let wallet = WalletBuilder::new(config.network.clone())
+        let wallet = WalletBuilder::new(config.network)
             .from_hex(config.private_key_hex.clone())
             .unwrap();
 
-        let indexer = IndexerContext::acquire_indexer(&config, wallet.address().clone())
+        let db = hydrant::Db::new(config.db_path.to_str().unwrap()).expect("failed to open db");
+
+        let indexer = UtxoIndexer::builder()
+            .address(wallet.address().to_vec())
+            .build(&db.env)
+            .expect("failed to build indexer");
+        let indexer = Arc::new(Mutex::new(indexer));
+
+        tracing::info!("Connecting to node...");
+        let node = PeerClient::connect(&config.node_host, get_magic(config.network))
             .await
-            .unwrap();
+            .expect("failed to connect to node");
+
+        let genesis_config = config::genesis_config(&config).unwrap();
+        let sync = hydrant::Sync::new(node, &db, &vec![indexer.clone()], genesis_config)
+            .await
+            .expect("failed to start sync");
 
         Self {
             config,
@@ -80,11 +79,29 @@ impl AsyncTestContext for DevnetContext {
             ogmios,
             protocol_params,
             wallet,
+            sync,
             indexer,
         }
     }
+}
 
-    fn teardown(self) -> impl std::future::Future<Output = ()> + Send {
-        async {}
+fn init_tracing() {
+    let fmt = tracing_subscriber::fmt::layer().with_filter(EnvFilter::from_default_env());
+    let blocked =
+        TokioBlockedLayer::new().with_warn_busy_single_poll(Some(Duration::from_micros(150)));
+    let console = console_subscriber::spawn();
+    tracing_subscriber::registry()
+        .with(fmt)
+        .with(blocked)
+        .with(console)
+        .try_init()
+        .expect("failed to init tracing");
+}
+
+fn get_magic(network: Network) -> u64 {
+    match network {
+        Network::Testnet => 5,
+        Network::Mainnet => 764824073,
+        Network::Other(n) => n as u64,
     }
 }

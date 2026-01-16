@@ -1,38 +1,24 @@
 #[cfg(test)]
-pub mod lock;
-
-#[cfg(test)]
 pub mod util;
 
 #[cfg(test)]
 pub mod context;
 
 #[cfg(test)]
-pub mod indexer;
-
-#[cfg(test)]
 mod test {
 
     use anyhow::Context as _;
-    use clap::Parser as _;
     use hose::builder::{BuiltTx, TxBuilder};
-    use hose::ogmios::OgmiosClient;
     use hose::ogmios::submit::SubmitResult;
     use hose::primitives::Output;
-    use hose::wallet::{Wallet, WalletBuilder};
     use pallas::ledger::addresses::Address;
-    use pallas::ledger::primitives::NetworkId;
-    use test_context::{AsyncTestContext, test_context};
-    use tracing::{debug, info, warn};
-    use url::Url;
+    use tracing::{debug, info};
 
-    use crate::config::{self, Config};
     use crate::devnet_tests::context::DevnetContext;
-    use crate::devnet_tests::lock::TestLock;
     use crate::devnet_tests::util;
 
     async fn sign_and_submit_tx(
-        context: &DevnetContext,
+        context: &mut DevnetContext,
         tx: BuiltTx,
     ) -> anyhow::Result<(BuiltTx, SubmitResult)> {
         let signed = tx.sign(&context.wallet)?;
@@ -51,10 +37,13 @@ mod test {
         }
     }
 
-    #[test_context(DevnetContext)]
     #[tokio::test]
-    async fn basic_tx(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let _lock = TestLock::wait_and_lock().await;
+    async fn basic_tx() -> anyhow::Result<()> {
+        let context = DevnetContext::get().await;
+        let mut context = context.lock().await;
+        if let Err(e) = context.sync.run_until_synced().await {
+            panic!("Failed to sync: {:?}", e);
+        }
 
         let change_address = context.wallet.address().clone();
         let tx = TxBuilder::new(context.network_id)
@@ -70,15 +59,18 @@ mod test {
             )
             .await?;
 
-        let (_signed, _res) = sign_and_submit_tx(context, tx).await?;
+        let (_signed, _res) = sign_and_submit_tx(&mut context, tx).await?;
 
         Ok(())
     }
 
-    #[test_context(DevnetContext)]
     #[tokio::test]
-    async fn utxo_with_datum(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let _lock = TestLock::wait_and_lock().await;
+    async fn utxo_with_datum() -> anyhow::Result<()> {
+        let context = DevnetContext::get().await;
+        let mut context = context.lock().await;
+        if let Err(e) = context.sync.run_until_synced().await {
+            panic!("Failed to sync: {:?}", e);
+        }
 
         let change_address = context.wallet.address().clone();
         let cbor = minicbor::to_vec(42)?;
@@ -100,15 +92,18 @@ mod test {
 
         let cbor_hex = tx.cbor_hex();
 
-        let (_signed, _res) = sign_and_submit_tx(context, tx).await?;
+        let (_signed, _res) = sign_and_submit_tx(&mut context, tx).await?;
 
         Ok(())
     }
 
-    #[test_context(DevnetContext)]
     #[tokio::test]
-    async fn spend_specific_output(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let _lock = TestLock::wait_and_lock().await;
+    async fn spend_specific_output() -> anyhow::Result<()> {
+        let context = DevnetContext::get().await;
+        let mut context = context.lock().await;
+        if let Err(e) = context.sync.run_until_synced().await {
+            panic!("Failed to sync: {:?}", e);
+        }
 
         let change_address = context.wallet.address().clone();
 
@@ -126,7 +121,7 @@ mod test {
                 )
                 .await?;
 
-            let (signed, _res) = sign_and_submit_tx(context, tx).await?;
+            let (signed, _res) = sign_and_submit_tx(&mut context, tx).await?;
 
             let output_idx = signed
                 .body()
@@ -141,7 +136,7 @@ mod test {
                     output_idx as u64,
                 );
 
-            util::wait_until_utxo_exists(context, output_pointer.clone()).await?;
+            util::wait_until_utxo_exists(&mut context, output_pointer.clone()).await?;
             (signed, output_pointer)
         };
 
@@ -156,7 +151,7 @@ mod test {
                 )
                 .await?;
 
-            sign_and_submit_tx(context, tx).await?
+            sign_and_submit_tx(&mut context, tx).await?
         };
 
         Ok(())
