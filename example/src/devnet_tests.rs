@@ -6,13 +6,13 @@ pub mod context;
 
 #[cfg(test)]
 mod test {
-
     use anyhow::Context as _;
     use hose::builder::{BuiltTx, TxBuilder};
     use hose::ogmios::submit::SubmitResult;
     use hose::primitives::Output;
     use pallas::ledger::addresses::Address;
     use serial_test::serial;
+    use test_context::test_context;
     use tracing::{debug, info};
 
     use crate::devnet_tests::context::DevnetContext;
@@ -38,12 +38,10 @@ mod test {
         }
     }
 
+    #[test_context(DevnetContext)]
     #[serial]
     #[tokio::test]
-    async fn basic_tx() -> anyhow::Result<()> {
-        let mut context = DevnetContext::new().await;
-        context.sync.run_until_synced().await?;
-
+    async fn basic_tx(context: &mut DevnetContext) -> anyhow::Result<()> {
         let change_address = context.wallet.address().clone();
         let tx = TxBuilder::new(context.network_id)
             .change_address(Address::Shelley(change_address))
@@ -58,19 +56,15 @@ mod test {
             )
             .await?;
 
-        let (_signed, _res) = sign_and_submit_tx(&mut context, tx).await?;
-
-        context.sync.stop().await?;
+        let (_signed, _res) = sign_and_submit_tx(context, tx).await?;
 
         Ok(())
     }
 
+    #[test_context(DevnetContext)]
     #[serial]
     #[tokio::test]
-    async fn utxo_with_datum() -> anyhow::Result<()> {
-        let mut context = DevnetContext::new().await;
-        context.sync.run_until_synced().await?;
-
+    async fn utxo_with_datum(context: &mut DevnetContext) -> anyhow::Result<()> {
         let change_address = context.wallet.address().clone();
         let cbor = minicbor::to_vec(42)?;
         let tx = TxBuilder::new(context.network_id)
@@ -89,21 +83,15 @@ mod test {
             )
             .await?;
 
-        let cbor_hex = tx.cbor_hex();
-
-        let (_signed, _res) = sign_and_submit_tx(&mut context, tx).await?;
-
-        context.sync.stop().await?;
+        let (_signed, _res) = sign_and_submit_tx(context, tx).await?;
 
         Ok(())
     }
 
+    #[test_context(DevnetContext)]
     #[serial]
     #[tokio::test]
-    async fn spend_specific_output() -> anyhow::Result<()> {
-        let mut context = DevnetContext::new().await;
-        context.sync.run_until_synced().await?;
-
+    async fn spend_specific_output(context: &mut DevnetContext) -> anyhow::Result<()> {
         let change_address = context.wallet.address().clone();
 
         let (_signed_tx, output_pointer) = {
@@ -120,7 +108,7 @@ mod test {
                 )
                 .await?;
 
-            let (signed, _res) = sign_and_submit_tx(&mut context, tx).await?;
+            let (signed, _res) = sign_and_submit_tx(context, tx).await?;
 
             let output_idx = signed
                 .body()
@@ -135,7 +123,7 @@ mod test {
                     output_idx as u64,
                 );
 
-            util::wait_until_utxo_exists(&mut context, output_pointer.clone()).await?;
+            util::wait_until_utxo_exists(context, output_pointer.clone()).await?;
             (signed, output_pointer)
         };
 
@@ -150,10 +138,8 @@ mod test {
                 )
                 .await?;
 
-            sign_and_submit_tx(&mut context, tx).await?
+            sign_and_submit_tx(context, tx).await?
         };
-
-        context.sync.stop().await?;
 
         Ok(())
     }

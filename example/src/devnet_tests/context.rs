@@ -9,6 +9,7 @@ use hydrant::{Sync, UtxoIndexer};
 use pallas::ledger::addresses::Network;
 use pallas::ledger::primitives::NetworkId;
 use pallas::network::facades::PeerClient;
+use test_context::AsyncTestContext;
 use tokio::sync::Mutex;
 use tokio_blocked::TokioBlockedLayer;
 use tracing_subscriber::layer::SubscriberExt as _;
@@ -26,6 +27,16 @@ pub struct DevnetContext {
     pub wallet: Wallet,
     pub sync: Sync,
     pub indexer: Arc<Mutex<UtxoIndexer>>,
+}
+
+impl AsyncTestContext for DevnetContext {
+    async fn setup() -> Self {
+        Self::new().await
+    }
+
+    async fn teardown(self) {
+        self.sync.stop().await.unwrap();
+    }
 }
 
 impl DevnetContext {
