@@ -1,5 +1,6 @@
 //! High-level transaction builder API
 
+use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
 
 use anyhow::Context;
@@ -7,12 +8,13 @@ use hydrant::UtxoIndexer;
 use hydrant::primitives::TxOutputPointer;
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
+use pallas::ledger::primitives::conway::LanguageView;
 use tokio::sync::Mutex;
 
 use crate::builder::coin_selection::{get_input_assets, get_input_lovelace};
 use crate::ogmios::OgmiosClient;
 use crate::ogmios::pparams::ProtocolParams;
-use crate::primitives::{Hash, Input, Output, ScriptKind, TxHash};
+use crate::primitives::{ExUnits, Hash, Input, Output, ScriptKind, TxHash};
 use crate::wallet::Wallet;
 
 pub mod coin_selection;
@@ -27,6 +29,7 @@ pub struct TxBuilder {
     body: StagingTransaction,
     collateral_address: Option<Address>,
     change_address: Option<Address>,
+    script_kinds: HashSet<ScriptKind>,
 }
 
 // TODO: redeemers, auxillary data, language view, mint asset, delegation, governance
@@ -36,6 +39,7 @@ impl TxBuilder {
             body: StagingTransaction::new().network_id(network.into()),
             collateral_address: None,
             change_address: None,
+            script_kinds: HashSet::new(),
         }
     }
 
@@ -45,6 +49,20 @@ impl TxBuilder {
     /// inputs from change address.
     pub fn add_input(mut self, input: Input) -> Self {
         self.body = self.body.input(input);
+        self
+    }
+
+    // TODO: Use a `Script` type
+    pub fn add_script_input(
+        mut self,
+        input: Input,
+        plutus_data: Vec<u8>,
+        ex_units: Option<ExUnits>,
+        script_kind: ScriptKind,
+    ) -> Self {
+        self.body = self.body.input(input.clone());
+        self.body = self.body.add_spend_redeemer(input, plutus_data, ex_units);
+        self.script_kinds.insert(script_kind);
         self
     }
 
@@ -145,6 +163,15 @@ impl TxBuilder {
         ogmios: &OgmiosClient,
         pparams: &ProtocolParams,
     ) -> anyhow::Result<BuiltTx> {
+        for script_kind in self.script_kinds.iter() {
+            if let Some(language_view) = language_view_for_script_kind(script_kind.clone(), pparams)
+            {
+                self.body = self
+                    .body
+                    .language_view(script_kind.clone(), language_view.1);
+            }
+        }
+
         let change_address = self
             .change_address
             .clone()
@@ -156,7 +183,8 @@ impl TxBuilder {
         };
 
         // 1. balance inputs/outputs with fee
-        let mut fee = calculate_min_fee(indexer.clone(), ogmios, &self.body, pparams).await;
+        let (mut fee, mut evaluation) =
+            calculate_min_fee(indexer.clone(), ogmios, &self.body, pparams, None).await;
         loop {
             let input_lovelace = get_input_lovelace(indexer.clone(), &self.body).await?;
             let input_assets = get_input_assets(indexer.clone(), &self.body).await?;
@@ -171,7 +199,14 @@ impl TxBuilder {
             .await;
             if additional_inputs.is_empty() {
                 // No need to add more inputs, but we still need to recalculate the fee
-                fee = calculate_min_fee(indexer.clone(), ogmios, &self.body, pparams).await;
+                (fee, evaluation) = calculate_min_fee(
+                    indexer.clone(),
+                    ogmios,
+                    &self.body,
+                    pparams,
+                    Some(evaluation),
+                )
+                .await;
                 self.body.fee = Some(fee);
                 break;
             }
@@ -179,7 +214,14 @@ impl TxBuilder {
                 self.body = self.body.input(input.into());
             }
 
-            fee = calculate_min_fee(indexer.clone(), ogmios, &self.body, pparams).await;
+            (fee, evaluation) = calculate_min_fee(
+                indexer.clone(),
+                ogmios,
+                &self.body,
+                pparams,
+                Some(evaluation),
+            )
+            .await;
             self.body = self.body.fee(fee);
         }
 
@@ -218,10 +260,49 @@ impl TxBuilder {
         }
 
         // 4. serialize to CBOR
-        match self.body.clone().build_conway() {
+        match self.body.clone().build_conway(Some(evaluation)) {
             Ok(tx) => Ok(BuiltTx::new(self.body, tx)),
             Err(e) => Err(anyhow::anyhow!("Failed to build transaction: {}", e)),
         }
+    }
+}
+
+pub fn language_view_for_script_kind(
+    script_kind: ScriptKind,
+    pparams: &ProtocolParams,
+) -> Option<LanguageView> {
+    match script_kind {
+        ScriptKind::Native => None,
+        ScriptKind::PlutusV1 => Some(LanguageView(
+            1,
+            pparams
+                .plutus_cost_models
+                .plutus_v1
+                .as_ref()
+                .unwrap()
+                .0
+                .clone(),
+        )),
+        ScriptKind::PlutusV2 => Some(LanguageView(
+            2,
+            pparams
+                .plutus_cost_models
+                .plutus_v2
+                .as_ref()
+                .unwrap()
+                .0
+                .clone(),
+        )),
+        ScriptKind::PlutusV3 => Some(LanguageView(
+            3,
+            pparams
+                .plutus_cost_models
+                .plutus_v3
+                .as_ref()
+                .unwrap()
+                .0
+                .clone(),
+        )),
     }
 }
 

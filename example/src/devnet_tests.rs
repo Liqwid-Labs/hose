@@ -9,8 +9,12 @@ mod test {
     use anyhow::Context as _;
     use hose::builder::{BuiltTx, TxBuilder};
     use hose::ogmios::submit::SubmitResult;
-    use hose::primitives::Output;
-    use pallas::ledger::addresses::Address;
+    use hose::primitives::{Output, Script, ScriptKind};
+    use pallas::ledger::addresses::{
+        Address, Network, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart,
+    };
+    use pallas::ledger::primitives::NetworkId;
+    use pallas::ledger::primitives::conway::PlutusV3Script;
     use serial_test::serial;
     use test_context::test_context;
     use tracing::{debug, info};
@@ -33,7 +37,7 @@ mod test {
             }
             Err(e) => {
                 info!("Failed transaction CBOR: {:?}", signed.cbor_hex());
-                Err(anyhow::anyhow!("Failed to submit transaction: {}", e))
+                Err(anyhow::anyhow!("Failed to submit transaction: {:?}", e))
             }
         }
     }
@@ -140,6 +144,80 @@ mod test {
 
             sign_and_submit_tx(context, tx).await?
         };
+
+        Ok(())
+    }
+
+    #[test_context(DevnetContext)]
+    #[serial]
+    #[tokio::test]
+    async fn spend_from_always_succeeds_script(context: &mut DevnetContext) -> anyhow::Result<()> {
+        let change_address = context.wallet.address().clone();
+        let script_bytes =
+            hex::decode("5101010023259800a518a4d136564004ae69").expect("invalid script bytes");
+        let script = Script::new(ScriptKind::PlutusV3, script_bytes.clone());
+
+        let network = match context.network_id {
+            NetworkId::Testnet => Network::Testnet,
+            NetworkId::Mainnet => Network::Mainnet,
+        };
+
+        let script_address = Address::Shelley(ShelleyAddress::new(
+            network,
+            ShelleyPaymentPart::Script(script.hash.into()),
+            ShelleyDelegationPart::Null,
+        ));
+
+        // Create a transaction that sends some Ada to the script address.
+        let (signed_tx, output_pointer) = {
+            let tx = TxBuilder::new(context.network_id)
+                .change_address(Address::Shelley(change_address.clone()))
+                .add_output(Output::new(script_address.clone(), 42_000_000))
+                .build(
+                    context.indexer.clone(),
+                    &context.ogmios,
+                    &context.protocol_params,
+                )
+                .await?;
+
+            let (signed, _res) = sign_and_submit_tx(context, tx).await?;
+
+            let output_idx = signed
+                .body()
+                .outputs
+                .iter()
+                .position(|output| output.address == script_address)
+                .context("output with script address not found")?;
+
+            let output_pointer: hydrant::primitives::TxOutputPointer =
+                hydrant::primitives::TxOutputPointer::new(
+                    signed.hash()?.0.into(),
+                    output_idx as u64,
+                );
+
+            (signed, output_pointer)
+        };
+
+        // Spend the output from the script address.
+        {
+            let tx = TxBuilder::new(context.network_id)
+                .change_address(Address::Shelley(change_address.clone()))
+                .add_script_input(
+                    output_pointer.into(),
+                    hex::decode("00").unwrap(),
+                    None,
+                    ScriptKind::PlutusV3,
+                )
+                .add_script(ScriptKind::PlutusV3, script.bytes.clone())
+                .build(
+                    context.indexer.clone(),
+                    &context.ogmios,
+                    &context.protocol_params,
+                )
+                .await?;
+
+            sign_and_submit_tx(context, tx).await?;
+        }
 
         Ok(())
     }

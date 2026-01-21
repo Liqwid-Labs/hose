@@ -18,7 +18,7 @@ pub struct EvaluateRequestParams {
 // Response
 // -----------
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct Evaluation {
     pub validator: RedeemerPointer,
     pub budget: ExecutionUnits,
@@ -60,3 +60,58 @@ define_ogmios_error! {
 }
 
 pub type EvaluateResponse = RpcResponse<Vec<Evaluation>, EvaluationError>;
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr as _;
+
+    use serde_json::json;
+
+    use super::*;
+
+    macro_rules! test_rpc_response_success {
+        ($name:ident, $json:expr, $type:ty, $error:ty, $value:expr) => {
+            #[test]
+            fn $name() {
+                let json = json!($json);
+                let evaluation: RpcResponse<$type, $error> = serde_json::from_value(json).unwrap();
+                match evaluation {
+                    RpcResponse::Success(success) => assert_eq!(success.result, $value),
+                    RpcResponse::Error(error) => panic!("Expected success, got error: {:?}", error),
+                }
+            }
+        };
+    }
+    test_rpc_response_success!(
+        deserialize_evaluation_response,
+        json!({"jsonrpc":"2.0","method":"evaluateTransaction","result":[{"validator":{"index":0,"purpose":"spend"},"budget":{"memory":6125,"cpu":1583505}}],"id":null}),
+        Vec<Evaluation>,
+        EvaluationError,
+        vec![Evaluation {
+            validator: RedeemerPointer {
+                index: 0,
+                purpose: RedeemerPurpose::Spend
+            },
+            budget: ExecutionUnits {
+                memory: Ratio(num_rational::BigRational::from_integer(6125.into())),
+                cpu: Ratio(num_rational::BigRational::from_integer(1583505.into()))
+            },
+        }]
+    );
+    test_rpc_response_success!(
+        deserialize_evaluation_mint_response,
+        json!({"jsonrpc":"2.0","method":"evaluateTransaction","result":[{"validator":{"index":0,"purpose":"mint"},"budget":{"memory":"1/10","cpu":"1/10"}}],"id":null}),
+        Vec<Evaluation>,
+        EvaluationError,
+        vec![Evaluation {
+            validator: RedeemerPointer {
+                index: 0,
+                purpose: RedeemerPurpose::Mint
+            },
+            budget: ExecutionUnits {
+                memory: Ratio(num_rational::BigRational::from_str("1/10").unwrap()),
+                cpu: Ratio(num_rational::BigRational::from_str("1/10").unwrap())
+            },
+        }]
+    );
+}

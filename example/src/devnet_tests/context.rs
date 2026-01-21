@@ -4,7 +4,9 @@ use std::time::Duration;
 use anyhow::Context as _;
 use clap::Parser as _;
 use hose::ogmios::OgmiosClient;
+use hose::primitives::AssetId;
 use hose::wallet::{Wallet, WalletBuilder};
+use hydrant::primitives::AssetIdResolver;
 use hydrant::{Sync, UtxoIndexer};
 use pallas::ledger::addresses::Network;
 use pallas::ledger::primitives::NetworkId;
@@ -72,9 +74,12 @@ impl DevnetContext {
             .expect("failed to connect to node");
 
         let genesis_config = config::genesis_config(&config).unwrap();
-        let sync = hydrant::Sync::new(node, &db, &vec![indexer.clone()], genesis_config)
+        let mut sync = hydrant::Sync::new(node, &db, &vec![indexer.clone()], genesis_config)
             .await
             .expect("failed to start sync");
+
+        // Sync to tip at least once
+        sync.run_until_synced().await.unwrap();
 
         Self {
             config,

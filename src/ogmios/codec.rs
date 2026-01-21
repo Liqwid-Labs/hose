@@ -97,14 +97,14 @@ pub struct TxOutput {
     // TODO: script
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionUnits {
     pub memory: Ratio,
     pub cpu: Ratio,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ratio(pub num_rational::BigRational);
 
 impl Into<BigRational> for Ratio {
@@ -113,16 +113,32 @@ impl Into<BigRational> for Ratio {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+enum RatioVariant {
+    Integer(u32),
+    String(String),
+}
+
 impl<'de> serde::Deserialize<'de> for Ratio {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let s: String = Deserialize::deserialize(deserializer)?;
-        Ok(Ratio(
-            num_rational::BigRational::from_str(&s)
-                .map_err(|e| serde::de::Error::custom(e.to_string()))?,
-        ))
+        let variant = match RatioVariant::deserialize(deserializer) {
+            Ok(variant) => variant,
+            Err(e) => return Err(e),
+        };
+
+        match variant {
+            RatioVariant::Integer(i) => {
+                Ok(Ratio(num_rational::BigRational::from_integer(i.into())))
+            }
+            RatioVariant::String(s) => Ok(Ratio(
+                num_rational::BigRational::from_str(&s)
+                    .map_err(|e| serde::de::Error::custom(e.to_string()))?,
+            )),
+        }
     }
 }
 
@@ -135,14 +151,49 @@ impl Serialize for Ratio {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg(test)]
+mod ratio_tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn deserialize_integer_ratio() {
+        let json = json!({ "memory": 100, "cpu": "100" });
+        let ratio: ExecutionUnits = serde_json::from_value(json).unwrap();
+        assert_eq!(
+            ratio.memory.0,
+            num_rational::BigRational::from_integer(100.into())
+        );
+        assert_eq!(
+            ratio.cpu.0,
+            num_rational::BigRational::from_integer(100.into())
+        );
+    }
+
+    #[test]
+    fn deserialize_string_ratio() {
+        let json = json!({ "memory": "100/1000", "cpu": "100/1000" });
+        let ratio: ExecutionUnits = serde_json::from_value(json).unwrap();
+        assert_eq!(
+            ratio.memory.0,
+            num_rational::BigRational::from_str("100/1000").unwrap()
+        );
+        assert_eq!(
+            ratio.cpu.0,
+            num_rational::BigRational::from_str("100/1000").unwrap()
+        );
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RedeemerPointer {
     pub purpose: RedeemerPurpose,
     pub index: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub enum RedeemerPurpose {
     #[serde(rename = "spend")]
     Spend,
@@ -770,5 +821,28 @@ mod tests {
                 }
             );
         }
+    }
+
+    mod redeemer_purpose {
+        use super::super::RedeemerPurpose;
+        use super::*;
+
+        macro_rules! test_redeemer_purpose {
+            ($name:ident, $json:expr, $purpose:expr) => {
+                #[test]
+                fn $name() {
+                    let json = json!($json);
+                    let purpose: RedeemerPurpose = serde_json::from_value(json).unwrap();
+                    assert_eq!(purpose, $purpose);
+                }
+            };
+        }
+
+        test_redeemer_purpose!(deserialize_spend, "spend", RedeemerPurpose::Spend);
+        test_redeemer_purpose!(deserialize_mint, "mint", RedeemerPurpose::Mint);
+        test_redeemer_purpose!(deserialize_publish, "publish", RedeemerPurpose::Publish);
+        test_redeemer_purpose!(deserialize_withdraw, "withdraw", RedeemerPurpose::Withdraw);
+        test_redeemer_purpose!(deserialize_vote, "vote", RedeemerPurpose::Vote);
+        test_redeemer_purpose!(deserialize_propose, "propose", RedeemerPurpose::Propose);
     }
 }
