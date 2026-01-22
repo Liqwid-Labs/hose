@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::ops::Deref as _;
 
+use num::ToPrimitive as _;
 use pallas::codec::utils::Bytes;
 use pallas::crypto::hash::Hash as PallasHash;
 use pallas::ledger::primitives::conway::{
@@ -11,10 +12,14 @@ use pallas::ledger::primitives::{Fragment, KeepRaw, NonEmptySet};
 use pallas::ledger::traverse::ComputeHash;
 
 use crate::builder::tx::{BuiltTransaction, StagingTransaction, TxBuilderError};
+use crate::ogmios::evaluate::Evaluation;
 use crate::primitives::{ExUnits, Hash, Output, RedeemerPurpose, ScriptKind};
 
 impl StagingTransaction {
-    pub fn build_conway(self) -> Result<BuiltTransaction, TxBuilderError> {
+    pub fn build_conway(
+        self,
+        evaluations: Option<Vec<Evaluation>>,
+    ) -> Result<BuiltTransaction, TxBuilderError> {
         let mut inputs = self
             .inputs
             .iter()
@@ -138,14 +143,40 @@ impl StagingTransaction {
         let mut redeemers = vec![];
 
         if let Some(rdmrs) = self.redeemers {
-            for (purpose, (pd, ex_units)) in rdmrs.deref().iter() {
+            for (index, (purpose, (pd, ex_units))) in rdmrs.deref().iter().enumerate() {
                 let ex_units = if let Some(ExUnits { mem, steps }) = ex_units {
                     PallasExUnits {
                         mem: *mem,
                         steps: *steps,
                     }
                 } else {
-                    todo!("ExUnits budget calculation not yet implement") // TODO
+                    if let Some(ref evaluations) = evaluations {
+                        let evaluation = evaluations
+                            .iter()
+                            .find(|e| e.validator.index == index as u64)
+                            .ok_or(TxBuilderError::RedeemerTargetMissing)?;
+                        PallasExUnits {
+                            mem: evaluation
+                                .budget
+                                .memory
+                                .0
+                                .clone()
+                                .to_integer()
+                                .to_u64()
+                                .unwrap(),
+                            steps: evaluation
+                                .budget
+                                .cpu
+                                .0
+                                .clone()
+                                .to_integer()
+                                .to_u64()
+                                .unwrap(),
+                        }
+                    } else {
+                        // FIXME: We shouldn't just assume 0 for the budget, but it will get recalculated later
+                        PallasExUnits { mem: 0, steps: 0 }
+                    }
                 };
 
                 let data = PlutusData::decode_fragment(pd.as_ref())

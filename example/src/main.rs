@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -7,14 +7,16 @@ use hose::ogmios::OgmiosClient;
 use hose::ogmios::pparams::ProtocolParams;
 use hose::primitives::Output;
 use hose::wallet::{Wallet, WalletBuilder};
-use hydrant::UtxoIndexer;
+use hydrant::{GenesisConfig, UtxoIndexer};
 use pallas::ledger::addresses::{Address, Network, ShelleyAddress};
 use pallas::ledger::primitives::NetworkId;
 use tokio::signal;
+use tokio::sync::Mutex;
 use tracing::{error, info};
 use url::Url;
 
 pub mod config;
+pub mod devnet_tests;
 
 #[tokio::main]
 pub async fn main() -> anyhow::Result<()> {
@@ -35,13 +37,22 @@ pub async fn main() -> anyhow::Result<()> {
 
     info!("Starting indexer sync...");
     let indexer = sync_indexer(&config, wallet.address().clone()).await?;
-    let indexer = indexer.lock().expect("indexer lock poisoned");
     println!("Indexer synced");
 
-    let utxos = indexer.address_utxos(&wallet.address().to_vec())?;
+    let utxos = {
+        let indexer = indexer.lock().await;
+        indexer.address_utxos(&wallet.address().to_vec())?
+    };
     info!("UTXOs: {:?}", utxos);
 
-    let tx = create_collateral_tx(network_id, &wallet, &indexer, &ogmios, &protocol_params).await?;
+    let tx = create_collateral_tx(
+        network_id,
+        &wallet,
+        indexer.clone(),
+        &ogmios,
+        &protocol_params,
+    )
+    .await?;
     let cbor = tx.cbor_hex();
     info!("CBOR: {:?}", cbor);
 
@@ -57,7 +68,7 @@ pub async fn main() -> anyhow::Result<()> {
 async fn create_collateral_tx(
     network_id: NetworkId,
     wallet: &Wallet,
-    indexer: &UtxoIndexer,
+    indexer: Arc<Mutex<UtxoIndexer>>,
     ogmios: &OgmiosClient,
     protocol_params: &ProtocolParams,
 ) -> anyhow::Result<BuiltTx> {
@@ -69,7 +80,7 @@ async fn create_collateral_tx(
             Address::Shelley(wallet.address().clone()),
             collateral_size,
         ))
-        .build(indexer, ogmios, protocol_params)
+        .build(indexer.clone(), ogmios, protocol_params)
         .await?;
 
     Ok(tx)
@@ -83,12 +94,11 @@ fn get_magic(network: Network) -> u64 {
     }
 }
 
-const MAX_ROLLBACK_BLOCKS: usize = 2160;
 async fn sync_indexer(
     config: &config::Config,
     address: ShelleyAddress,
 ) -> anyhow::Result<Arc<Mutex<UtxoIndexer>>> {
-    let db = hydrant::Db::new(config.db_path.to_str().unwrap(), MAX_ROLLBACK_BLOCKS)?;
+    let db = hydrant::Db::new(config.db_path.to_str().unwrap())?;
 
     let indexer = UtxoIndexer::builder()
         .address(address.to_vec())
@@ -101,9 +111,11 @@ async fn sync_indexer(
         .await
         .expect("failed to connect to node");
 
+    let genesis_config = config::genesis_config(config)?;
+
     // Listen for chain-sync events until shutdown or reached tip
     info!("Starting sync...");
-    let mut sync = hydrant::Sync::new(node, &db, &vec![indexer.clone()])
+    let mut sync = hydrant::Sync::new(node, &db, &vec![indexer.clone()], genesis_config)
         .await
         .expect("failed to start sync");
     let sync_result = tokio::select! {

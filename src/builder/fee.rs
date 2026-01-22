@@ -1,19 +1,26 @@
+use std::sync::Arc;
+
 use hydrant::UtxoIndexer;
 use hydrant::primitives::TxOutputPointer;
 use num::{BigRational, ToPrimitive as _};
+use tokio::sync::Mutex;
 
 use crate::builder::tx::StagingTransaction;
 use crate::ogmios::OgmiosClient;
+use crate::ogmios::evaluate::Evaluation;
 use crate::ogmios::pparams::ProtocolParams;
 
 /// Returns the minimum lovelace for a transaction
 pub async fn calculate_min_fee(
-    indexer: &UtxoIndexer,
+    indexer: Arc<Mutex<UtxoIndexer>>,
     ogmios: &OgmiosClient,
     tx: &StagingTransaction,
     pparams: &ProtocolParams,
-) -> u64 {
-    let built_tx = tx.clone().build_conway().unwrap();
+    evaluation: Option<Vec<Evaluation>>,
+) -> (u64, Vec<Evaluation>) {
+    let built_tx = tx.clone().build_conway(evaluation.clone()).unwrap();
+    let evaluation = ogmios.evaluate(&built_tx.bytes).await.unwrap();
+    let built_tx = tx.clone().build_conway(Some(evaluation.clone())).unwrap();
 
     // Base fee + fee from size
     let mut min_fee = BigRational::from_integer(pparams.min_fee_constant.lovelace.into());
@@ -23,7 +30,6 @@ pub async fn calculate_min_fee(
 
     // Fee from scripts
     // TODO: don't unwrap
-    let evaluation = ogmios.evaluate(&built_tx.bytes).await.unwrap();
     let total_cpu = evaluation
         .iter()
         .map(|e| e.budget.cpu.0.clone())
@@ -45,7 +51,10 @@ pub async fn calculate_min_fee(
             .collect::<Vec<_>>();
 
         // TODO: don't unwrap
-        let reference_inputs = indexer.utxos(&reference_inputs).unwrap();
+        let reference_inputs = {
+            let indexer = indexer.lock().await;
+            indexer.utxos(&reference_inputs).unwrap()
+        };
 
         let total_script_size = reference_inputs
             .iter()
@@ -75,11 +84,12 @@ pub async fn calculate_min_fee(
         }
     }
 
-    min_fee
+    let fee = min_fee
         .floor()
         .to_integer()
         .to_biguint()
         .expect("failed to convert to biguint")
         .to_u64()
-        .expect("failed to convert to u64")
+        .expect("failed to convert to u64");
+    (fee, evaluation)
 }
