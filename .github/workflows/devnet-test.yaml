@@ -54,11 +54,11 @@ jobs:
           cat > .env <<EOF
           PRIVATE_KEY_HEX=d9c91b352d7fdb0f28a48da89a630e27e5b82a4ad12397728891ba9f03412a8b
           NETWORK=testnet
-          DB_PATH=target/devnet-db
+          DB_PATH=../target/devnet-db
           NODE_HOST=127.0.0.1:3000
           OGMIOS_URL=http://localhost:1337
-          GENESIS_BYRON_PATH=.ci/genesis-byron.json
-          GENESIS_SHELLEY_PATH=.ci/genesis-shelley.json
+          GENESIS_BYRON_PATH=../.ci/genesis-byron.json
+          GENESIS_SHELLEY_PATH=../.ci/genesis-shelley.json
           EOF
 
       - name: Run devnet tests
