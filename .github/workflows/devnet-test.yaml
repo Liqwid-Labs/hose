@@ -1,0 +1,69 @@
+name: Run Integration Tests in the Devnet
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      packages: read
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout the devnet repo
+        uses: actions/checkout@v4
+        with:
+          repository: liqwid-labs/local-testnet
+          ref: main
+          path: local-testnet
+          token: ${{ secrets.GH_REPO_PAT }}
+
+      - name: Login to GitHub Container Registry (needed for Betterfrost)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Launch containers
+        run: docker compose -f local-testnet/docker-compose.yaml up -d
+
+      - name: Copy genesis files from container
+        run: |
+          mkdir -p .ci
+          for _ in {1..30}; do
+            if docker exec cardano-node test -f /testnet/node-config/genesis-byron.json && \
+               docker exec cardano-node test -f /testnet/node-config/genesis-shelley.json; then
+              break
+            fi
+            sleep 2
+          done
+          docker cp cardano-node:/testnet/node-config/genesis-byron.json .ci/genesis-byron.json
+          docker cp cardano-node:/testnet/node-config/genesis-shelley.json .ci/genesis-shelley.json
+
+      - name: Populate .env
+        run: |
+          cat > .env <<EOF
+          PRIVATE_KEY_HEX=d9c91b352d7fdb0f28a48da89a630e27e5b82a4ad12397728891ba9f03412a8b
+          NETWORK=testnet
+          DB_PATH=target/devnet-db
+          NODE_HOST=127.0.0.1:3000
+          OGMIOS_URL=http://localhost:1337
+          GENESIS_BYRON_PATH=.ci/genesis-byron.json
+          GENESIS_SHELLEY_PATH=.ci/genesis-shelley.json
+          EOF
+
+      - name: Run devnet tests
+        run: cargo test -p hose-demo --bin hose-demo
+
+      - name: Tear down containers
+        if: ${{ always() }}
+        run: docker compose -f local-testnet/docker-compose.yaml down
