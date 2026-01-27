@@ -46,8 +46,8 @@ jobs:
           DB_PATH=../target/devnet-db
           NODE_HOST=127.0.0.1:3000
           OGMIOS_URL=http://localhost:1337
-          GENESIS_BYRON_PATH=../configs/byron.json
-          GENESIS_SHELLEY_PATH=../configs/shelley.json
+          GENESIS_BYRON_PATH=../configs/testnet/byron.json
+          GENESIS_SHELLEY_PATH=../configs/testnet/shelley.json
           EOF
 
       - name: Run devnet tests
