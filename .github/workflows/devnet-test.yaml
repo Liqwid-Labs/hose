@@ -1,0 +1,58 @@
+name: Run Integration Tests in the Devnet
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      packages: read
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Checkout the devnet repo
+        uses: actions/checkout@v5
+        with:
+          repository: liqwid-labs/local-testnet
+          ref: main
+          path: local-testnet
+          token: ${{ secrets.GH_REPO_PAT }}
+
+      - uses: swatinem/rust-cache@v2
+
+      - name: Login to GitHub Container Registry (needed for Betterfrost)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Launch containers
+        run: docker compose -f local-testnet/docker-compose.yaml up -d
+
+      - name: Populate .env
+        run: |
+          cat > .env <<EOF
+          PRIVATE_KEY_HEX=d9c91b352d7fdb0f28a48da89a630e27e5b82a4ad12397728891ba9f03412a8b
+          NETWORK=testnet
+          DB_PATH=../target/devnet-db
+          NODE_HOST=127.0.0.1:3000
+          OGMIOS_URL=http://localhost:1337
+          GENESIS_BYRON_PATH=../configs/testnet/byron.json
+          GENESIS_SHELLEY_PATH=../configs/testnet/shelley.json
+          EOF
+
+      - name: Run devnet tests
+        run: cargo test -p hose-demo --bin hose-demo
+
+      - name: Tear down containers
+        if: ${{ always() }}
+        run: docker compose -f local-testnet/docker-compose.yaml down

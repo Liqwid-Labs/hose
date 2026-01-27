@@ -63,7 +63,6 @@ impl DevnetContext {
         let db = hydrant::Db::new(config.db_path.to_str().unwrap()).expect("failed to open db");
 
         let indexer = UtxoIndexer::builder()
-            .address(wallet.address().to_vec())
             .build(&db.env)
             .expect("failed to build indexer");
         let indexer = Arc::new(Mutex::new(indexer));
@@ -97,11 +96,9 @@ fn init_tracing() {
     let fmt = tracing_subscriber::fmt::layer().with_filter(EnvFilter::from_default_env());
     let blocked =
         TokioBlockedLayer::new().with_warn_busy_single_poll(Some(Duration::from_micros(150)));
-    let console = console_subscriber::spawn();
     let _ = tracing_subscriber::registry()
         .with(fmt)
         .with(blocked)
-        .with(console)
         .try_init();
 }
 
