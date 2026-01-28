@@ -1,14 +1,16 @@
 use std::cmp::Reverse;
 use std::sync::Arc;
 
+use anyhow::Context;
 use hydrant::UtxoIndexer;
 use hydrant::primitives::{AssetsDelta, TxOutput};
 use ogmios_client::method::pparams::ProtocolParams;
 use pallas::ledger::addresses::Address as PallasAddress;
+use pallas::ledger::primitives::Fragment;
 use tokio::sync::Mutex;
 
 use crate::builder::{Output, StagingTransaction};
-use crate::primitives::{Assets, Certificate};
+use crate::primitives::{Assets, Certificate, DatumOption};
 
 pub async fn get_input_lovelace(
     indexer: Arc<Mutex<UtxoIndexer>>,
@@ -77,7 +79,9 @@ pub async fn select_coins(
     possible_utxos: &[TxOutput],
     tx: &StagingTransaction,
     fee: u64,
-) -> Vec<TxOutput> {
+    change_address: &PallasAddress,
+    change_datum: Option<DatumOption>,
+) -> anyhow::Result<Vec<TxOutput>> {
     let mut selected_utxos = vec![];
 
     // Filter utxos already used as inputs
@@ -89,16 +93,33 @@ pub async fn select_coins(
 
     // TODO: consider minted assets
 
-    // assume a change output of maximum 500 bytes
-    // TODO: technically we should use the actual size of the change output
-    let min_change_lovelace = pparams.min_utxo_deposit_coefficient * 500;
+    let change_assets = input_assets
+        .clone()
+        .saturating_sub(get_output_assets(tx))
+        .into();
+    let mut dummy_change_output = Output::new(change_address.clone(), u64::MAX)
+        .add_assets(change_assets)
+        .context("failed to create dummy change output")?;
+
+    if let Some(datum) = change_datum {
+        dummy_change_output.datum = Some(datum);
+    }
+
+    let min_change_lovelace = pparams.min_utxo_deposit_coefficient
+        * (dummy_change_output
+            .build_babbage()
+            .context("failed to build dummy change output")?
+            .encode_fragment()
+            .unwrap()
+            .len() as u64
+            + 160);
+
     let registration_deposit = get_registration_deposit(tx);
     let deregistration_refund = get_deregistration_refund(tx);
     let withdrawal_lovelace = get_withdrawal_lovelace(tx);
-    let required_lovelace =
+    let mut required_lovelace =
         (get_output_lovelace(tx) + fee + min_change_lovelace + registration_deposit)
             .saturating_sub(input_lovelace + withdrawal_lovelace + deregistration_refund);
-    let mut required_lovelace = required_lovelace;
     let mut required_assets: AssetsDelta =
         get_output_assets(tx).saturating_sub(input_assets).into();
 
@@ -126,13 +147,13 @@ pub async fn select_coins(
         selected_utxos.push(utxo.clone());
     }
 
-    // TODO: give a proper error
-    assert!(
-        required_lovelace == 0 && required_assets.only_positive().is_empty(),
-        "failed to select coins, wallet doesn't contain enough funds"
-    );
+    if required_lovelace > 0 || !required_assets.only_positive().is_empty() {
+        return Err(anyhow::anyhow!(
+            "failed to select coins, wallet doesn't contain enough funds"
+        ));
+    }
 
-    selected_utxos
+    Ok(selected_utxos)
 }
 
 /// Create change output if needed because transaction is not balanced.
@@ -141,6 +162,7 @@ pub async fn handle_change(
     change_address: &PallasAddress,
     tx: &StagingTransaction,
     fee: u64,
+    change_datum: Option<DatumOption>,
 ) -> anyhow::Result<Option<Output>> {
     // TODO: consider minted assets
     let input_lovelace = get_input_lovelace(indexer.clone(), tx).await?;
@@ -159,7 +181,14 @@ pub async fn handle_change(
         return Ok(None);
     }
 
-    let change_output =
-        Output::new(change_address.clone(), change_lovelace).add_assets(change_assets.into());
-    Ok(Some(change_output.expect("failed to create change output")))
+    let mut change_output =
+        Output::new(change_address.clone(), change_lovelace)
+            .add_assets(change_assets.into())
+            .expect("failed to create change output");
+
+    if let Some(datum) = change_datum {
+        change_output.datum = Some(datum);
+    }
+
+    Ok(Some(change_output))
 }

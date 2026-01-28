@@ -22,6 +22,7 @@ impl StagingTransaction {
     pub fn build_conway(
         self,
         evaluations: Option<Vec<Evaluation>>,
+        dummy_witness_count: usize,
     ) -> Result<BuiltTransaction, TxBuilderError> {
         let mut inputs = self
             .inputs
@@ -322,6 +323,27 @@ impl StagingTransaction {
             None
         };
 
+        // Construct dummy witnesses if requested
+        let mut vkey_witnesses = vec![];
+        for i in 0..dummy_witness_count {
+            let mut vkey = vec![0u8; 32];
+            // Ensure uniqueness to satisfy Set/Map encoding requirements
+            vkey[0] = (i % 256) as u8;
+            vkey[1] = (i / 256) as u8;
+            let signature = vec![0u8; 64];
+
+            vkey_witnesses.push(pallas::ledger::primitives::conway::VKeyWitness {
+                vkey: vkey.into(),
+                signature: signature.into(),
+            });
+        }
+
+        let witness_set_vkeys = if !vkey_witnesses.is_empty() {
+            Some(NonEmptySet::from_vec(vkey_witnesses).unwrap())
+        } else {
+            None
+        };
+
         let script_data_hash = self.language_view.map(|language_view| {
             let dta = pallas::ledger::primitives::conway::ScriptData {
                 redeemers: Some(witness_set_redeemers.clone()),
@@ -357,7 +379,7 @@ impl StagingTransaction {
             }
             .into(),
             transaction_witness_set: WitnessSet {
-                vkeywitness: None,
+                vkeywitness: witness_set_vkeys,
                 native_script: NonEmptySet::from_vec(
                     native_script.into_iter().map(|x| x.into()).collect(),
                 ),

@@ -9,13 +9,14 @@ use hydrant::primitives::TxOutputPointer;
 use ogmios_client::OgmiosHttpClient;
 use ogmios_client::method::pparams::ProtocolParams;
 use pallas::ledger::addresses::Address;
+use pallas::ledger::primitives::Fragment;
 use pallas::ledger::primitives::NetworkId;
 use pallas::ledger::primitives::conway::LanguageView;
 use tokio::sync::Mutex;
 
 use crate::builder::coin_selection::{get_input_assets, get_input_lovelace};
 use crate::primitives::{
-    Certificate, ExUnits, Hash, Input, Output, RewardAccount, ScriptKind, TxHash,
+    Certificate, DatumOption, ExUnits, Hash, Input, Output, RewardAccount, ScriptKind, TxHash,
 };
 use crate::wallet::Wallet;
 
@@ -31,6 +32,7 @@ pub struct TxBuilder {
     body: StagingTransaction,
     collateral_address: Option<Address>,
     change_address: Option<Address>,
+    change_datum: Option<DatumOption>,
     script_kinds: HashSet<ScriptKind>,
 }
 
@@ -41,6 +43,7 @@ impl TxBuilder {
             body: StagingTransaction::new().network_id(network.into()),
             collateral_address: None,
             change_address: None,
+            change_datum: None,
             script_kinds: HashSet::new(),
         }
     }
@@ -200,6 +203,11 @@ impl TxBuilder {
         self
     }
 
+    pub fn change_datum(mut self, datum: DatumOption) -> Self {
+        self.change_datum = Some(datum);
+        self
+    }
+
     fn non_collateral_inputs(&self) -> Vec<TxOutputPointer> {
         self.body
             .inputs
@@ -264,7 +272,7 @@ impl TxBuilder {
 
         // 1. balance inputs/outputs with fee
         let (mut fee, mut evaluation) =
-            calculate_min_fee(indexer.clone(), ogmios, &self.body, pparams, None).await;
+            calculate_min_fee(indexer.clone(), ogmios, &self.body, pparams, None).await?;
         loop {
             let input_lovelace = get_input_lovelace(indexer.clone(), &self.body).await?;
             let input_assets = get_input_assets(indexer.clone(), &self.body).await?;
@@ -275,18 +283,57 @@ impl TxBuilder {
                 &address_utxos,
                 &self.body,
                 fee,
+                &change_address,
+                self.change_datum.clone(),
             )
-            .await;
+            .await?;
             if additional_inputs.is_empty() {
                 // No need to add more inputs, but we still need to recalculate the fee
+                // Recalculate fee with the change output included
+                let mut body_for_fee = self.body.clone();
+                if let Some(change_output) = handle_change(
+                    indexer.clone(),
+                    &change_address,
+                    &self.body,
+                    fee,
+                    self.change_datum.clone(),
+                )
+                .await?
+                {
+                    body_for_fee = body_for_fee.output(change_output);
+                }
+
+                if self.requires_collateral(indexer.clone()).await? {
+                    let return_address = self
+                        .collateral_address
+                        .as_ref()
+                        .unwrap_or(&change_address);
+                    let mut dummy_collateral = Output::new(return_address.clone(), u64::MAX);
+                    if self.collateral_address.is_none() {
+                        if let Some(datum) = &self.change_datum {
+                            dummy_collateral.datum = Some(datum.clone());
+                        }
+                    }
+                    body_for_fee = body_for_fee.collateral_output(dummy_collateral);
+
+                    // Add dummy collateral input for size estimation
+                    let collateral_input = address_utxos
+                        .first()
+                        .map(|u| Input::from(TxOutputPointer::from(u.clone())))
+                        .unwrap_or_else(|| Input::new(Hash([0u8; 32]), 0));
+                    body_for_fee = body_for_fee.collateral_input(collateral_input);
+                }
+
+                body_for_fee.fee = Some(fee);
+
                 (fee, evaluation) = calculate_min_fee(
                     indexer.clone(),
                     ogmios,
-                    &self.body,
+                    &body_for_fee,
                     pparams,
                     Some(evaluation),
                 )
-                .await;
+                .await?;
                 self.body.fee = Some(fee);
                 break;
             }
@@ -294,14 +341,51 @@ impl TxBuilder {
                 self.body = self.body.input(input.into());
             }
 
+            // Recalculate fee with the change output included
+            let mut body_for_fee = self.body.clone();
+            if let Some(change_output) = handle_change(
+                indexer.clone(),
+                &change_address,
+                &self.body,
+                fee,
+                self.change_datum.clone(),
+            )
+            .await?
+            {
+                body_for_fee = body_for_fee.output(change_output);
+            }
+
+            if self.requires_collateral(indexer.clone()).await? {
+                let return_address = self
+                    .collateral_address
+                    .as_ref()
+                    .unwrap_or(&change_address);
+                let mut dummy_collateral = Output::new(return_address.clone(), u64::MAX);
+                if self.collateral_address.is_none() {
+                    if let Some(datum) = &self.change_datum {
+                        dummy_collateral.datum = Some(datum.clone());
+                    }
+                }
+                body_for_fee = body_for_fee.collateral_output(dummy_collateral);
+
+                // Add dummy collateral input for size estimation
+                let collateral_input = address_utxos
+                    .first()
+                    .map(|u| Input::from(TxOutputPointer::from(u.clone())))
+                    .unwrap_or_else(|| Input::new(Hash([0u8; 32]), 0));
+                body_for_fee = body_for_fee.collateral_input(collateral_input);
+            }
+
+            body_for_fee.fee = Some(fee);
+
             (fee, evaluation) = calculate_min_fee(
                 indexer.clone(),
                 ogmios,
-                &self.body,
+                &body_for_fee,
                 pparams,
                 Some(evaluation),
             )
-            .await;
+            .await?;
             self.body = self.body.fee(fee);
         }
 
@@ -312,6 +396,7 @@ impl TxBuilder {
             self.change_address.as_ref().unwrap(),
             &self.body,
             fee,
+            self.change_datum.clone(),
         )
         .await?
         {
@@ -336,11 +421,40 @@ impl TxBuilder {
             let collateral_utxo_pointer: TxOutputPointer = collateral_utxo.into();
             self.body = self.body.collateral_input(collateral_utxo_pointer.into());
 
-            // TODO: collateral output
+            // Handle Collateral Return
+            let return_address = self
+                .collateral_address
+                .as_ref()
+                .or(self.change_address.as_ref())
+                .context("no address available for collateral return")?;
+
+            let total_collateral = collateral_utxo.lovelace;
+            let return_amount = total_collateral.saturating_sub(required_lovelace);
+
+            let mut return_output = Output::new(return_address.clone(), return_amount);
+            if self.collateral_address.is_none() {
+                if let Some(datum) = &self.change_datum {
+                    return_output.datum = Some(datum.clone());
+                }
+            }
+
+            // Check min UTXO for return output
+            let min_return_lovelace = pparams.min_utxo_deposit_coefficient
+                * (return_output
+                    .build_babbage()
+                    .context("failed to build collateral return output")?
+                    .encode_fragment()
+                    .unwrap()
+                    .len() as u64
+                    + 160);
+
+            if return_amount >= min_return_lovelace {
+                self.body = self.body.collateral_output(return_output);
+            }
         }
 
         // 4. serialize to CBOR
-        match self.body.clone().build_conway(Some(evaluation)) {
+        match self.body.clone().build_conway(Some(evaluation), 0) {
             Ok(tx) => Ok(BuiltTx::new(self.body, tx)),
             Err(e) => Err(anyhow::anyhow!("Failed to build transaction: {}", e)),
         }

@@ -371,4 +371,78 @@ mod test {
 
         Ok(())
     }
+
+    #[test_context(DevnetContext)]
+    #[serial]
+    #[tokio::test]
+    async fn multi_witness_tx(context: &mut DevnetContext) -> anyhow::Result<()> {
+        // 1. Create a second wallet
+        // Just increment the last byte of the configured key to get a new one
+        let original_key_hex = &context.config.private_key_hex;
+        let mut key_bytes = hex::decode(original_key_hex)?;
+        key_bytes[0] = key_bytes[0].wrapping_add(1); // Simple perturbation
+        let wallet2 = hose::wallet::WalletBuilder::new(context.config.network)
+            .from_hex(hex::encode(key_bytes))?;
+
+        let wallet1_addr = Address::Shelley(context.wallet.address().clone());
+        let wallet2_addr = Address::Shelley(wallet2.address().clone());
+
+        // 2. Fund Wallet 2 (send 10 ADA)
+        {
+            let tx = TxBuilder::new(context.network_id)
+                .change_address(wallet1_addr.clone())
+                .add_output(Output::new(wallet2_addr.clone(), 10_000_000))
+                .build(
+                    context.indexer.clone(),
+                    &context.ogmios,
+                    &context.protocol_params,
+                )
+                .await?;
+            sign_and_submit_tx(context, tx).await?;
+        }
+
+        // 3. Find inputs for both wallets
+        let input1 = {
+            let indexer = context.indexer.lock().await;
+            let utxos = indexer.address_utxos(&context.wallet.address().to_vec())?;
+            let output = utxos
+                .iter()
+                .max_by_key(|u| u.lovelace)
+                .context("wallet 1 empty")?;
+            hydrant::primitives::TxOutputPointer::from(output.clone())
+        };
+
+        // Wait for Wallet 2 funds
+        let input2 = loop {
+            let indexer = context.indexer.lock().await;
+            let utxos = indexer.address_utxos(&wallet2.address().to_vec())?;
+            if let Some(utxo) = utxos.first() {
+                break hydrant::primitives::TxOutputPointer::from(utxo.clone());
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        };
+
+        // 4. Construct Multi-witness Tx
+        // Input from Wallet 1 + Input from Wallet 2 -> Output to Wallet 1
+        let tx = TxBuilder::new(context.network_id)
+            .change_address(wallet1_addr.clone())
+            .add_input(input1.into())
+            .add_input(input2.into())
+            .add_output(Output::new(wallet1_addr.clone(), 5_000_000)) // Just sending some back
+            .build(
+                context.indexer.clone(),
+                &context.ogmios,
+                &context.protocol_params,
+            )
+            .await?;
+
+        // 5. Sign with second wallet
+        // Note: `sign` adds signatures.
+        let tx = tx.sign(&wallet2)?; // Sign with Wallet 2
+
+        // 6. Sign and submit with first wallet
+        sign_and_submit_tx(context, tx).await?;
+
+        Ok(())
+    }
 }
