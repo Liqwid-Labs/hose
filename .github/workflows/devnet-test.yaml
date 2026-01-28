@@ -64,7 +64,7 @@ jobs:
           EOF
 
       - name: Run devnet tests
-        run: cargo test -p hose-demo --bin hose-demo
+        run: cargo test -p hose-devnet-tests
 
       - name: Tear down containers
         if: ${{ always() }}

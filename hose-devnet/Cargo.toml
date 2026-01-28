@@ -1,0 +1,26 @@
+[package]
+name = "hose-devnet"
+description = "Tools for creating and running devnet tests with Hose"
+edition = "2024"
+
+[lib]
+
+[dependencies]
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+hose = { path = "../hose" }
+hose-devnet-macros = { path = "../hose-devnet-macros" }
+hydrant = { workspace = true }
+ogmios-client = { workspace = true }
+pallas = { workspace = true }
+
+serial_test = "3.3.1"
+test-context = "0.5.4"
+
+dotenv = "0.15.0"
+clap = { version = "4.5.51", features = ["derive", "env"] }
+hex = "0.4"
+url = "2.5.7"
