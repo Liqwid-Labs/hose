@@ -38,6 +38,19 @@ jobs:
       - name: Launch containers
         run: docker compose -f local-testnet/docker-compose.yaml up -d
 
+      - name: Copy genesis files from container
+        run: |
+          mkdir -p .ci
+          for _ in {1..30}; do
+            if docker exec cardano-node test -f /testnet/node-config/genesis-byron.json && \
+               docker exec cardano-node test -f /testnet/node-config/genesis-shelley.json; then
+              break
+            fi
+            sleep 2
+          done
+          docker cp cardano-node:/testnet/node-config/genesis-byron.json .ci/genesis-byron.json
+          docker cp cardano-node:/testnet/node-config/genesis-shelley.json .ci/genesis-shelley.json
+
       - name: Populate .env
         run: |
           cat > .env <<EOF
@@ -46,8 +59,8 @@ jobs:
           DB_PATH=../target/devnet-db
           NODE_HOST=127.0.0.1:3000
           OGMIOS_URL=http://localhost:1337
-          GENESIS_BYRON_PATH=../configs/testnet/byron.json
-          GENESIS_SHELLEY_PATH=../configs/testnet/shelley.json
+          GENESIS_BYRON_PATH=../.ci/genesis-byron.json
+          GENESIS_SHELLEY_PATH=../.ci/genesis-shelley.json
           EOF
 
       - name: Run devnet tests

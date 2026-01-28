@@ -1205,7 +1205,7 @@ checksum = "135b12329e5e3ce057a9f972339ea52bc954fe1e9358ef27f95e89716fbc5424"
 [[package]]
 name = "hydrant"
 version = "0.1.0"
-source = "git+https://github.com/liqwid-labs/hydrant#33520911091068664ad120f1a3ca69e95e59d48e"
+source = "git+https://github.com/liqwid-labs/hydrant#c16a7f02383f81d3f90b57aae8c60391e3212a43"
 dependencies = [
  "anyhow",
  "futures",
