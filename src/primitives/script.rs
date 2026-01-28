@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 
 pub use hydrant::primitives::{Datum, DatumHash, Script, ScriptHash, ScriptKind};
 
-use super::{Input, Policy};
+use super::{Hash, Input, Policy};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum DatumOption {
@@ -16,7 +16,7 @@ pub enum RedeemerPurpose {
     Spend(Input),
     Mint(Policy),
     // Reward TODO
-    // Cert TODO
+    Cert(Hash<28>),
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]

@@ -14,6 +14,7 @@ mod test {
         Address, Network, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart,
     };
     use pallas::ledger::primitives::NetworkId;
+    use serde_json::Value;
     use serial_test::serial;
     use test_context::test_context;
     use tracing::{debug, info};
@@ -87,6 +88,104 @@ mod test {
             .await?;
 
         let (_signed, _res) = sign_and_submit_tx(context, tx).await?;
+
+        Ok(())
+    }
+
+    #[test_context(DevnetContext)]
+    #[serial]
+    #[tokio::test]
+    async fn register_and_withdraw_zero_script_reward(
+        context: &mut DevnetContext,
+    ) -> anyhow::Result<()> {
+        let change_address = context.wallet.address().clone();
+        let script_bytes =
+            hex::decode("5101010023259800a518a4d136564004ae69").expect("invalid script bytes");
+        // NOTE: we use a V2 tag here and a V3 in the `_without_redeemer` test just so we don't
+        // hit "account already registered" errros from the ledger.
+        let script = Script::new(ScriptKind::PlutusV2, script_bytes.clone());
+
+        // TODO: we should actually extend the ogmios-client to parse the key deposit from the
+        // protocol params.
+        let key_deposit = {
+            let genesis_path = context
+                .config
+                .genesis_shelley_path
+                .as_ref()
+                .context("genesis_shelley_path not set")?;
+            let genesis_str = std::fs::read_to_string(genesis_path)?;
+            let genesis_json: Value = serde_json::from_str(&genesis_str)?;
+            genesis_json["protocolParams"]["keyDeposit"]
+                .as_u64()
+                .context("missing protocolParams.keyDeposit")?
+        };
+
+        let redeemer = hex::decode("00").unwrap();
+
+        let registration_tx = TxBuilder::new(context.network_id)
+            .change_address(Address::Shelley(change_address.clone()))
+            .register_script_stake(
+                ScriptKind::PlutusV3,
+                script.bytes.clone(),
+                Some(redeemer.clone()),
+                None,
+                key_deposit,
+            )
+            .build(
+                context.indexer.clone(),
+                &context.ogmios,
+                &context.protocol_params,
+            )
+            .await?;
+
+        sign_and_submit_tx(context, registration_tx).await?;
+
+        Ok(())
+    }
+
+    #[test_context(DevnetContext)]
+    #[serial]
+    #[tokio::test]
+    async fn register_script_stake_without_redeemer(
+        context: &mut DevnetContext,
+    ) -> anyhow::Result<()> {
+        let change_address = context.wallet.address().clone();
+        let script_bytes =
+            hex::decode("5101010023259800a518a4d136564004ae69").expect("invalid script bytes");
+        let script = Script::new(ScriptKind::PlutusV3, script_bytes.clone());
+
+        // TODO: we should actually extend the ogmios-client to parse the key deposit from the
+        // protocol params.
+        let key_deposit = {
+            let genesis_path = context
+                .config
+                .genesis_shelley_path
+                .as_ref()
+                .context("genesis_shelley_path not set")?;
+            let genesis_str = std::fs::read_to_string(genesis_path)?;
+            let genesis_json: Value = serde_json::from_str(&genesis_str)?;
+            genesis_json["protocolParams"]["keyDeposit"]
+                .as_u64()
+                .context("missing protocolParams.keyDeposit")?
+        };
+
+        let registration_tx = TxBuilder::new(context.network_id)
+            .change_address(Address::Shelley(change_address.clone()))
+            .register_script_stake(
+                ScriptKind::PlutusV2,
+                script.bytes.clone(),
+                None,
+                None,
+                key_deposit,
+            )
+            .build(
+                context.indexer.clone(),
+                &context.ogmios,
+                &context.protocol_params,
+            )
+            .await?;
+
+        sign_and_submit_tx(context, registration_tx).await?;
 
         Ok(())
     }

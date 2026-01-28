@@ -6,14 +6,15 @@ use ogmios_client::method::evaluate::Evaluation;
 use pallas::codec::utils::Bytes;
 use pallas::crypto::hash::Hash as PallasHash;
 use pallas::ledger::primitives::conway::{
-    ExUnits as PallasExUnits, Multiasset, NativeScript, NetworkId, NonZeroInt, PlutusData,
-    PlutusScript, Redeemer, RedeemerTag, TransactionBody, TransactionInput, Tx, WitnessSet,
+    Certificate as PallasCertificate, ExUnits as PallasExUnits, Multiasset, NativeScript,
+    NetworkId, NonZeroInt, PlutusData, PlutusScript, Redeemer, RedeemerTag, ScriptHash, StakeCredential as PallasStakeCredential,
+    TransactionBody, TransactionInput, Tx, WitnessSet,
 };
 use pallas::ledger::primitives::{Fragment, KeepRaw, NonEmptySet};
 use pallas::ledger::traverse::ComputeHash;
 
 use crate::builder::tx::{BuiltTransaction, StagingTransaction, TxBuilderError};
-use crate::primitives::{ExUnits, Hash, Output, RedeemerPurpose, ScriptKind};
+use crate::primitives::{Certificate, ExUnits, Hash, Output, RedeemerPurpose, ScriptKind};
 
 impl StagingTransaction {
     pub fn build_conway(
@@ -140,6 +141,41 @@ impl StagingTransaction {
 
         mint_policies.sort_unstable_by_key(|x| *x);
 
+        let certificates = NonEmptySet::from_vec(
+            self.certificates
+                .iter()
+                .map(|cert| match cert {
+                    // TODO: handle key credentials as well
+                    Certificate::StakeRegistrationScript { script_hash, deposit } => {
+                        let cert_hash = *script_hash;
+                        let script_hash: ScriptHash = cert_hash.into();
+                        let has_cert_redeemer = self
+                            .redeemers
+                            .as_ref()
+                            .map_or(false, |rdmrs| {
+                                rdmrs.contains_key(&RedeemerPurpose::Cert(cert_hash))
+                            });
+                        if has_cert_redeemer {
+                            PallasCertificate::Reg(
+                                PallasStakeCredential::ScriptHash(script_hash),
+                                *deposit,
+                            )
+                        } else {
+                            PallasCertificate::StakeRegistration(
+                                PallasStakeCredential::ScriptHash(script_hash),
+                            )
+                        }
+                    }
+                })
+                .collect(),
+        );
+
+        let certificate_script_hashes = self
+            .certificates
+            .iter()
+            .map(|cert| cert.script_hash())
+            .collect::<Vec<_>>();
+
         let mut redeemers = vec![];
 
         if let Some(rdmrs) = self.redeemers {
@@ -210,7 +246,21 @@ impl StagingTransaction {
                             data,
                             ex_units,
                         })
-                    } // todo!("reward and cert redeemers not yet supported"), // TODO
+                    }
+                    RedeemerPurpose::Cert(script_hash) => {
+                        let index = certificate_script_hashes
+                            .iter()
+                            .position(|hash| hash == script_hash)
+                            .ok_or(TxBuilderError::RedeemerTargetMissing)?
+                            as u32;
+
+                        redeemers.push(Redeemer {
+                            tag: RedeemerTag::Cert,
+                            index,
+                            data,
+                            ex_units,
+                        })
+                    }
                 }
             }
         };
@@ -243,8 +293,8 @@ impl StagingTransaction {
                 ttl: self.invalid_from_slot,
                 validity_interval_start: self.valid_from_slot,
                 fee: self.fee.unwrap_or_default(),
-                certificates: None,        // TODO
-                withdrawals: None,         // TODO
+                certificates,
+                withdrawals: None,
                 auxiliary_data_hash: None, // TODO (accept user input)
                 mint,
                 script_data_hash,

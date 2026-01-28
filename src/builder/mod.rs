@@ -14,7 +14,7 @@ use pallas::ledger::primitives::conway::LanguageView;
 use tokio::sync::Mutex;
 
 use crate::builder::coin_selection::{get_input_assets, get_input_lovelace};
-use crate::primitives::{ExUnits, Hash, Input, Output, ScriptKind, TxHash};
+use crate::primitives::{Certificate, ExUnits, Hash, Input, Output, ScriptKind, TxHash};
 use crate::wallet::Wallet;
 
 pub mod coin_selection;
@@ -73,6 +73,32 @@ impl TxBuilder {
     /// select inputs from change address.
     pub fn add_collateral_input(mut self, input: Input) -> Self {
         self.body = self.body.collateral_input(input);
+        self
+    }
+
+    pub fn register_script_stake(
+        mut self,
+        script_kind: ScriptKind,
+        script_bytes: Vec<u8>,
+        // NOTE: Right now, redeemers and script execution aren't required by the ledger, but the
+        // Conway CDDL mandates them and they'll become necessary after the next hard fork.
+        redeemer: Option<Vec<u8>>,
+        ex_units: Option<ExUnits>,
+        // TODO: we don't really need to pass the deposit, it's a protocol parameter. We should get
+        // it from ogmios-client.
+        deposit: u64,
+    ) -> Self {
+        let script_hash = script_kind.hash(&script_bytes);
+        self.body = self.body.add_certificate(Certificate::StakeRegistrationScript {
+            script_hash,
+            deposit,
+        });
+        if let Some(redeemer) = redeemer {
+            // if a redeemer was provided, we attach the script and its ex_units as well
+            self.body = self.body.add_cert_redeemer(script_hash, redeemer, ex_units);
+            self.body = self.body.script(script_kind, script_bytes);
+            self.script_kinds.insert(script_kind);
+        }
         self
     }
 

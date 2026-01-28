@@ -7,11 +7,13 @@ mod input;
 mod output;
 mod script;
 mod signer;
+mod stake;
 
 pub use input::*;
 pub use output::*;
 pub use script::*;
 pub use signer::*;
+pub use stake::*;
 
 pub type PubKeyHash = Hash<28>;
 pub type PublicKey = Hash<32>;

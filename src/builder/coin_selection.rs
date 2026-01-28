@@ -38,6 +38,10 @@ pub fn get_output_lovelace(tx: &StagingTransaction) -> u64 {
     tx.outputs.iter().map(|output| output.lovelace).sum()
 }
 
+pub fn get_certificate_deposit(tx: &StagingTransaction) -> u64 {
+    tx.certificates.iter().map(|cert| cert.deposit()).sum()
+}
+
 pub fn get_output_assets(tx: &StagingTransaction) -> Assets {
     tx.outputs
         .iter()
@@ -67,8 +71,12 @@ pub async fn select_coins(
     // assume a change output of maximum 500 bytes
     // TODO: technically we should use the actual size of the change output
     let min_change_lovelace = pparams.min_utxo_deposit_coefficient * 500;
-    let mut required_lovelace =
-        (get_output_lovelace(tx) + fee + min_change_lovelace).saturating_sub(input_lovelace);
+    let deposit_lovelace = get_certificate_deposit(tx);
+    let mut required_lovelace = (get_output_lovelace(tx)
+        + fee
+        + min_change_lovelace
+        + deposit_lovelace)
+        .saturating_sub(input_lovelace);
     let mut required_assets: AssetsDelta =
         get_output_assets(tx).saturating_sub(input_assets).into();
 
@@ -114,10 +122,12 @@ pub async fn handle_change(
 ) -> anyhow::Result<Option<Output>> {
     // TODO: consider minted assets
     let input_lovelace = get_input_lovelace(indexer.clone(), tx).await?;
+    let deposit_lovelace = get_certificate_deposit(tx);
     let output_lovelace = get_output_lovelace(tx);
     let change_lovelace = input_lovelace
         .saturating_sub(output_lovelace)
         .saturating_sub(fee);
+    let change_lovelace = change_lovelace.saturating_sub(deposit_lovelace);
 
     let input_assets: AssetsDelta = get_input_assets(indexer, tx).await?.into();
     let output_assets: AssetsDelta = get_output_assets(tx).into();

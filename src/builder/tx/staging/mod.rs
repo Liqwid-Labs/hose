@@ -6,7 +6,7 @@ use pallas::ledger::primitives::conway::AuxiliaryData;
 
 use super::TxBuilderError;
 use crate::primitives::{
-    Address, AssetsDelta, Datum, DatumHash, ExUnits, Hash, Input, Output, PubKeyHash,
+    Address, AssetsDelta, Certificate, Datum, DatumHash, ExUnits, Hash, Input, Output, PubKeyHash,
     RedeemerPurpose, Redeemers, Script, ScriptHash, ScriptKind,
 };
 
@@ -33,7 +33,7 @@ pub struct StagingTransaction {
     pub change_address: Option<Address>,
     pub language_view: Option<pallas::ledger::primitives::conway::LanguageView>,
     pub auxiliary_data: Option<AuxiliaryData>,
-    // pub certificates: TODO
+    pub certificates: Vec<Certificate>,
     // pub withdrawals: TODO
     // pub updates: TODO
     // pub phase_2_valid: TODO
@@ -267,6 +267,29 @@ impl StagingTransaction {
         self
     }
 
+    pub fn add_cert_redeemer(
+        mut self,
+        script_hash: Hash<28>,
+        plutus_data: Vec<u8>,
+        ex_units: Option<ExUnits>,
+    ) -> Self {
+        let mut rdmrs = self.redeemers.unwrap_or_default();
+        rdmrs.insert(
+            RedeemerPurpose::Cert(script_hash),
+            (plutus_data, ex_units),
+        );
+        self.redeemers = Some(rdmrs);
+
+        self
+    }
+
+    pub fn add_certificate(mut self, certificate: Certificate) -> Self {
+        let script_hash = certificate.script_hash();
+        self.certificates.retain(|c| c.script_hash() != script_hash);
+        self.certificates.push(certificate);
+        self
+    }
+
     pub fn signature_amount_override(mut self, amount: u8) -> Self {
         self.signature_amount_override = Some(amount);
         self
@@ -299,3 +322,6 @@ impl StagingTransaction {
         self
     }
 }
+
+#[cfg(test)]
+mod tests;
