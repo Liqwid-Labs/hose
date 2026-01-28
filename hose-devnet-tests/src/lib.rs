@@ -7,6 +7,7 @@ mod test {
     use pallas::ledger::addresses::{
         Address, Network, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart,
     };
+    use pallas::codec::minicbor;
     use pallas::ledger::primitives::NetworkId;
     use tracing::info;
 

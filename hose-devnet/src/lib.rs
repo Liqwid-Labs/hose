@@ -27,7 +27,7 @@ pub async fn wait_until_utxo_exists(
     loop {
         debug!(
             "Waiting for utxo to exist: {}#{}",
-            hex::encode(output_pointer.hash.as_ref()),
+            output_pointer.hash.to_hex(),
             output_pointer.index
         );
         {

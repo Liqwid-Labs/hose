@@ -1,5 +1,5 @@
 [package]
-name = "devnet-tests"
+name = "hose-devnet-tests"
 edition = "2024"
 
 [lib]
@@ -10,13 +10,10 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
-hex = { workspace = true }
+hex = "0.4"
 
 hose-devnet = { path = "../hose-devnet" }
-
-minicbor = { workspace = true, features = ["alloc"] }
-
-hose = { path = ".." }
+hose = { path = "../hose" }
 hydrant = { git = "https://github.com/liqwid-labs/hydrant" }
 ogmios-client = { git = "https://github.com/liqwid-labs/ogmios-client-rs" }
 pallas = { git = "https://github.com/txpipe/pallas", features = ["unstable"] }

@@ -561,23 +561,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "devnet-tests"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "hex",
- "hose",
- "hose-devnet",
- "hydrant",
- "minicbor 2.1.3",
- "ogmios-client",
- "pallas",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -985,7 +968,6 @@ dependencies = [
  "ed25519-bip32",
  "hex",
  "hydrant",
- "minicbor 2.1.3",
  "num",
  "ogmios-client",
  "pallas",
@@ -1023,6 +1005,22 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "hose-devnet-tests"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "hex",
+ "hose",
+ "hose-devnet",
+ "hydrant",
+ "ogmios-client",
+ "pallas",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

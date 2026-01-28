@@ -17,5 +17,5 @@ To run the tests, you need to set the following environment variables:
 Then, you can run the tests with:
 
 ```sh
-cargo test -p devnet-tests --bin devnet-tests
+cargo test -p hose-devnet-tests
 ```
