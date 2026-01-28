@@ -4,8 +4,8 @@ use anyhow::Context as _;
 use clap::Parser as _;
 use hose::wallet::{Wallet, WalletBuilder};
 use hydrant::UtxoIndexer;
-use ogmios_client::OgmiosClient;
-use ogmios_client::pparams::ProtocolParams;
+use ogmios_client::OgmiosHttpClient;
+use ogmios_client::method::pparams::ProtocolParams;
 use pallas::ledger::addresses::Network;
 use pallas::ledger::primitives::NetworkId;
 use pallas::network::facades::PeerClient;
@@ -21,7 +21,7 @@ use crate::config::{self, Config};
 pub struct DevnetContext {
     pub config: Config,
     pub network_id: NetworkId,
-    pub ogmios: OgmiosClient,
+    pub ogmios: OgmiosHttpClient,
     pub protocol_params: ProtocolParams,
     pub wallet: Wallet,
     pub sync_handle: tokio::task::JoinHandle<()>,

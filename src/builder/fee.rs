@@ -3,7 +3,9 @@ use std::sync::Arc;
 use hydrant::UtxoIndexer;
 use hydrant::primitives::TxOutputPointer;
 use num::{BigRational, ToPrimitive as _};
-use ogmios_client::{OgmiosClient, evaluate::Evaluation, pparams::ProtocolParams};
+use ogmios_client::OgmiosHttpClient;
+use ogmios_client::method::evaluate::Evaluation;
+use ogmios_client::method::pparams::ProtocolParams;
 use tokio::sync::Mutex;
 
 use crate::builder::tx::StagingTransaction;
@@ -11,7 +13,7 @@ use crate::builder::tx::StagingTransaction;
 /// Returns the minimum lovelace for a transaction
 pub async fn calculate_min_fee(
     indexer: Arc<Mutex<UtxoIndexer>>,
-    ogmios: &OgmiosClient,
+    ogmios: &OgmiosHttpClient,
     tx: &StagingTransaction,
     pparams: &ProtocolParams,
     evaluation: Option<Vec<Evaluation>>,

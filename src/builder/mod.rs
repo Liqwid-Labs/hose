@@ -6,8 +6,8 @@ use std::sync::Arc;
 use anyhow::Context;
 use hydrant::UtxoIndexer;
 use hydrant::primitives::TxOutputPointer;
-use ogmios_client::OgmiosClient;
-use ogmios_client::pparams::ProtocolParams;
+use ogmios_client::OgmiosHttpClient;
+use ogmios_client::method::pparams::ProtocolParams;
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
 use pallas::ledger::primitives::conway::LanguageView;
@@ -160,7 +160,7 @@ impl TxBuilder {
     pub async fn build(
         mut self,
         indexer: Arc<Mutex<UtxoIndexer>>,
-        ogmios: &OgmiosClient,
+        ogmios: &OgmiosHttpClient,
         pparams: &ProtocolParams,
     ) -> anyhow::Result<BuiltTx> {
         for script_kind in self.script_kinds.iter() {

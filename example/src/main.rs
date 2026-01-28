@@ -7,7 +7,7 @@ use hose::primitives::Output;
 use hose::wallet::{Wallet, WalletBuilder};
 use hydrant::UtxoIndexer;
 use ogmios_client::OgmiosClient;
-use ogmios_client::pparams::ProtocolParams;
+use ogmios_client::method::pparams::ProtocolParams;
 use pallas::ledger::addresses::{Address, Network, ShelleyAddress};
 use pallas::ledger::primitives::NetworkId;
 use tokio::signal;

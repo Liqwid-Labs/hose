@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::ops::Deref as _;
 
 use num::ToPrimitive as _;
-use ogmios_client::evaluate::Evaluation;
+use ogmios_client::method::evaluate::Evaluation;
 use pallas::codec::utils::Bytes;
 use pallas::crypto::hash::Hash as PallasHash;
 use pallas::ledger::primitives::conway::{

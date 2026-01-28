@@ -18,8 +18,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.145"
 serde_repr = "0.1.20"
 
-hydrant = { git = "https://github.com/liqwid-labs/hydrant", branch = "PRO-2143" }
-ogmios-client = { git = "https://github.com/liqwid-labs/hydrant", branch = "PRO-2143" }
+hydrant = { git = "https://github.com/liqwid-labs/hydrant" }
+ogmios-client = { git = "https://github.com/liqwid-labs/ogmios-client-rs" }
 polymer = { git = "https://github.com/liqwid-labs/polymer" }
 pallas = { git = "https://github.com/txpipe/pallas", features = ["unstable"] }
 

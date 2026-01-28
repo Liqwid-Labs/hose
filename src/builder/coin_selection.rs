@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use hydrant::UtxoIndexer;
 use hydrant::primitives::{AssetsDelta, TxOutput};
-use ogmios_client::pparams::ProtocolParams;
+use ogmios_client::method::pparams::ProtocolParams;
 use pallas::ledger::addresses::Address as PallasAddress;
 use tokio::sync::Mutex;
 
