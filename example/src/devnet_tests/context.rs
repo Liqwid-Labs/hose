@@ -49,7 +49,7 @@ impl DevnetContext {
         let network_id = NetworkId::try_from(config.network.value())
             .expect("failed to convert network to network id");
 
-        let ogmios = OgmiosClient::new(Url::parse(&config.ogmios_url).unwrap());
+        let ogmios = OgmiosHttpClient::new(Url::parse(&config.ogmios_url).unwrap());
 
         let protocol_params = ogmios.protocol_params().await.unwrap();
 
@@ -71,7 +71,7 @@ impl DevnetContext {
 
         let genesis_config = config::genesis_config(&config).unwrap();
 
-        let ws_ogmios_url = Some(config.ogmios_url.replace("http", "ws"));
+        let ws_ogmios_url = Some(config.ogmios_url.replace("http", "ws").parse().unwrap());
 
         let mut sync = hydrant::Sync::new(
             node,

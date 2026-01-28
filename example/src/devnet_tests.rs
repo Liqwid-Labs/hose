@@ -9,7 +9,7 @@ mod test {
     use anyhow::Context as _;
     use hose::builder::{BuiltTx, TxBuilder};
     use hose::primitives::{Output, Script, ScriptKind};
-    use ogmios_client::submit::SubmitResult;
+    use ogmios_client::method::submit::SubmitResult;
     use pallas::ledger::addresses::{
         Address, Network, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart,
     };
