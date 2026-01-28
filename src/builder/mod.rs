@@ -1,19 +1,19 @@
 //! High-level transaction builder API
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use anyhow::Context;
 use hydrant::UtxoIndexer;
 use hydrant::primitives::TxOutputPointer;
+use ogmios_client::OgmiosHttpClient;
+use ogmios_client::method::pparams::ProtocolParams;
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
 use pallas::ledger::primitives::conway::LanguageView;
 use tokio::sync::Mutex;
 
 use crate::builder::coin_selection::{get_input_assets, get_input_lovelace};
-use crate::ogmios::OgmiosClient;
-use crate::ogmios::pparams::ProtocolParams;
 use crate::primitives::{ExUnits, Hash, Input, Output, ScriptKind, TxHash};
 use crate::wallet::Wallet;
 
@@ -160,7 +160,7 @@ impl TxBuilder {
     pub async fn build(
         mut self,
         indexer: Arc<Mutex<UtxoIndexer>>,
-        ogmios: &OgmiosClient,
+        ogmios: &OgmiosHttpClient,
         pparams: &ProtocolParams,
     ) -> anyhow::Result<BuiltTx> {
         for script_kind in self.script_kinds.iter() {

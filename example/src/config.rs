@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use hydrant::GenesisConfig;
 use pallas::ledger::addresses::Network;
 

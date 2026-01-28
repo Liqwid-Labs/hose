@@ -3,11 +3,11 @@ use std::sync::Arc;
 
 use hydrant::UtxoIndexer;
 use hydrant::primitives::{AssetsDelta, TxOutput};
+use ogmios_client::method::pparams::ProtocolParams;
 use pallas::ledger::addresses::Address as PallasAddress;
 use tokio::sync::Mutex;
 
 use crate::builder::{Output, StagingTransaction};
-use crate::ogmios::pparams::ProtocolParams;
 use crate::primitives::Assets;
 
 pub async fn get_input_lovelace(
