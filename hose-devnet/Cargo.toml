@@ -4,7 +4,6 @@ description = "Tools for creating and running devnet tests with Hose"
 edition = "2024"
 
 [lib]
-source = "src/lib.rs"
 
 [dependencies]
 hose = { path = "../" }

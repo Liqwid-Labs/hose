@@ -15,13 +15,13 @@ use syn::parse_quote;
 ///
 /// Example usage:
 /// ```
-/// #[hose_devnet_macros::devnet_test]
+/// #[hose_devnet::test]
 /// async fn my_test(context: &mut DevnetContext) -> anyhow::Result<()> {
 ///     Ok(())
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn devnet_test(attrs: TokenStream, item: TokenStream) -> TokenStream {
+pub fn test(_attrs: TokenStream, item: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(item as syn::ItemFn);
 
     let refactored_fn = refactor_fn(input);

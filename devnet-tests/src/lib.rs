@@ -1,17 +1,16 @@
 #[cfg(test)]
 mod test {
     use anyhow::Context as _;
-    use hose::builder::{BuiltTx, TxBuilder};
+    use hose::builder::TxBuilder;
     use hose::primitives::{Output, Script, ScriptKind};
     use hose_devnet::prelude::*;
-    use ogmios_client::method::submit::SubmitResult;
     use pallas::ledger::addresses::{
         Address, Network, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart,
     };
     use pallas::ledger::primitives::NetworkId;
     use tracing::info;
 
-    #[hose_devnet::devnet_test]
+    #[hose_devnet::test]
     async fn basic_tx(context: &mut DevnetContext) -> anyhow::Result<()> {
         let change_address = context.wallet.address().clone();
         let tx = TxBuilder::new(context.network_id)
@@ -32,7 +31,7 @@ mod test {
         Ok(())
     }
 
-    #[hose_devnet::devnet_test]
+    #[hose_devnet::test]
     async fn utxo_with_datum(context: &mut DevnetContext) -> anyhow::Result<()> {
         let change_address = context.wallet.address().clone();
         let cbor = minicbor::to_vec(42)?;
@@ -57,7 +56,7 @@ mod test {
         Ok(())
     }
 
-    #[hose_devnet::devnet_test]
+    #[hose_devnet::test]
     async fn spend_specific_output(context: &mut DevnetContext) -> anyhow::Result<()> {
         let change_address = context.wallet.address().clone();
 
@@ -111,7 +110,7 @@ mod test {
         Ok(())
     }
 
-    #[hose_devnet::devnet_test]
+    #[hose_devnet::test]
     async fn spend_from_always_succeeds_script(context: &mut DevnetContext) -> anyhow::Result<()> {
         let change_address = context.wallet.address().clone();
         let script_bytes =
@@ -183,7 +182,7 @@ mod test {
         Ok(())
     }
 
-    #[hose_devnet::devnet_test]
+    #[hose_devnet::test]
     async fn chain_spend(context: &mut DevnetContext) -> anyhow::Result<()> {
         const NUM_TXS: u64 = 50;
         const AMOUNT_STEP: u64 = 1_000_000;

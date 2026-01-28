@@ -2,14 +2,15 @@ pub mod config;
 pub mod context;
 pub use context::DevnetContext;
 use hose::primitives::TxHash;
-pub use hose_devnet_macros::devnet_test;
+pub use hose_devnet_macros::test;
 use hydrant::primitives::TxOutputPointer;
 use tracing::debug;
 pub use {serial_test, test_context, tokio};
 
 pub mod prelude {
-    pub use super::{DevnetContext, devnet_test, serial_test, test_context, tokio};
+    pub use super::{DevnetContext, serial_test, test, test_context, tokio};
 }
+
 pub async fn wait_n_slots(_context: &DevnetContext, n: u64) -> anyhow::Result<()> {
     // TODO: Use ogmios API to check slots
 
