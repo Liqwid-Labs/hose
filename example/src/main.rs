@@ -3,11 +3,11 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use clap::Parser;
 use hose::builder::{BuiltTx, TxBuilder};
-use hose::ogmios::OgmiosClient;
-use hose::ogmios::pparams::ProtocolParams;
 use hose::primitives::Output;
 use hose::wallet::{Wallet, WalletBuilder};
-use hydrant::{GenesisConfig, UtxoIndexer};
+use hydrant::UtxoIndexer;
+use ogmios_client::OgmiosClient;
+use ogmios_client::pparams::ProtocolParams;
 use pallas::ledger::addresses::{Address, Network, ShelleyAddress};
 use pallas::ledger::primitives::NetworkId;
 use tokio::signal;
@@ -113,11 +113,19 @@ async fn sync_indexer(
 
     let genesis_config = config::genesis_config(config)?;
 
+    let ws_ogmios_url = Some(config.ogmios_url.replace("http", "ws"));
+
     // Listen for chain-sync events until shutdown or reached tip
     info!("Starting sync...");
-    let mut sync = hydrant::Sync::new(node, &db, &vec![indexer.clone()], genesis_config)
-        .await
-        .expect("failed to start sync");
+    let mut sync = hydrant::Sync::new(
+        node,
+        &db,
+        &vec![indexer.clone()],
+        genesis_config,
+        ws_ogmios_url,
+    )
+    .await
+    .expect("failed to start sync");
     let sync_result = tokio::select! {
         res = sync.run_until_synced() => res,
         res = shutdown_signal() => {

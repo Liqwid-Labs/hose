@@ -3,12 +3,10 @@ use std::sync::Arc;
 use hydrant::UtxoIndexer;
 use hydrant::primitives::TxOutputPointer;
 use num::{BigRational, ToPrimitive as _};
+use ogmios_client::{OgmiosClient, evaluate::Evaluation, pparams::ProtocolParams};
 use tokio::sync::Mutex;
 
 use crate::builder::tx::StagingTransaction;
-use crate::ogmios::OgmiosClient;
-use crate::ogmios::evaluate::Evaluation;
-use crate::ogmios::pparams::ProtocolParams;
 
 /// Returns the minimum lovelace for a transaction
 pub async fn calculate_min_fee(

@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::ops::Deref as _;
 
 use num::ToPrimitive as _;
+use ogmios_client::evaluate::Evaluation;
 use pallas::codec::utils::Bytes;
 use pallas::crypto::hash::Hash as PallasHash;
 use pallas::ledger::primitives::conway::{
@@ -12,7 +13,6 @@ use pallas::ledger::primitives::{Fragment, KeepRaw, NonEmptySet};
 use pallas::ledger::traverse::ComputeHash;
 
 use crate::builder::tx::{BuiltTransaction, StagingTransaction, TxBuilderError};
-use crate::ogmios::evaluate::Evaluation;
 use crate::primitives::{ExUnits, Hash, Output, RedeemerPurpose, ScriptKind};
 
 impl StagingTransaction {

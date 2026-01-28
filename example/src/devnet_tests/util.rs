@@ -1,7 +1,7 @@
 use hex;
 use hose::primitives::TxHash;
 use hydrant::primitives::TxOutputPointer;
-use tracing::info;
+use tracing::debug;
 
 use crate::devnet_tests::context::DevnetContext;
 
@@ -19,16 +19,18 @@ pub async fn wait_until_utxo_exists(
     output_pointer: TxOutputPointer,
 ) -> anyhow::Result<()> {
     loop {
-        context.sync.run_until_synced().await?;
-        info!(
+        debug!(
             "Waiting for utxo to exist: {}#{}",
             hex::encode(output_pointer.hash.as_ref()),
             output_pointer.index
         );
-        let indexer = context.indexer.lock().await;
-        if indexer.utxo(output_pointer.clone())?.is_some() {
-            return Ok(());
+        {
+            let indexer = context.indexer.lock().await;
+            if indexer.utxo(output_pointer.clone())?.is_some() {
+                return Ok(());
+            }
         }
+        tokio::time::sleep(std::time::Duration::from_millis(1)).await;
     }
 }
 

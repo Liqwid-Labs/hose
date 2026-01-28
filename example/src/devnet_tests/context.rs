@@ -1,19 +1,16 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::Context as _;
 use clap::Parser as _;
-use hose::ogmios::OgmiosClient;
-use hose::primitives::AssetId;
 use hose::wallet::{Wallet, WalletBuilder};
-use hydrant::primitives::AssetIdResolver;
-use hydrant::{Sync, UtxoIndexer};
+use hydrant::UtxoIndexer;
+use ogmios_client::OgmiosClient;
+use ogmios_client::pparams::ProtocolParams;
 use pallas::ledger::addresses::Network;
 use pallas::ledger::primitives::NetworkId;
 use pallas::network::facades::PeerClient;
 use test_context::AsyncTestContext;
 use tokio::sync::Mutex;
-use tokio_blocked::TokioBlockedLayer;
 use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
 use tracing_subscriber::{EnvFilter, Layer};
@@ -25,9 +22,9 @@ pub struct DevnetContext {
     pub config: Config,
     pub network_id: NetworkId,
     pub ogmios: OgmiosClient,
-    pub protocol_params: hose::ogmios::pparams::ProtocolParams,
+    pub protocol_params: ProtocolParams,
     pub wallet: Wallet,
-    pub sync: Sync,
+    pub sync_handle: tokio::task::JoinHandle<()>,
     pub indexer: Arc<Mutex<UtxoIndexer>>,
 }
 
@@ -37,7 +34,7 @@ impl AsyncTestContext for DevnetContext {
     }
 
     async fn teardown(self) {
-        self.sync.stop().await.unwrap();
+        self.sync_handle.abort();
     }
 }
 
@@ -48,7 +45,7 @@ impl DevnetContext {
             .unwrap();
         init_tracing();
 
-        let config = config::Config::parse();
+        let config = config::Config::parse_from::<_, String>(vec![]);
         let network_id = NetworkId::try_from(config.network.value())
             .expect("failed to convert network to network id");
 
@@ -73,12 +70,26 @@ impl DevnetContext {
             .expect("failed to connect to node");
 
         let genesis_config = config::genesis_config(&config).unwrap();
-        let mut sync = hydrant::Sync::new(node, &db, &vec![indexer.clone()], genesis_config)
-            .await
-            .expect("failed to start sync");
 
-        // Sync to tip at least once
-        sync.run_until_synced().await.unwrap();
+        let ws_ogmios_url = Some(config.ogmios_url.replace("http", "ws"));
+
+        let mut sync = hydrant::Sync::new(
+            node,
+            &db,
+            &vec![indexer.clone()],
+            genesis_config,
+            ws_ogmios_url,
+        )
+        .await
+        .expect("failed to start sync");
+
+        sync.run_until_synced().await.expect("failed to sync");
+
+        let sync_handle = tokio::spawn(async move {
+            if let Err(e) = sync.run().await {
+                tracing::error!("Sync task failed: {:?}", e);
+            }
+        });
 
         Self {
             config,
@@ -86,7 +97,7 @@ impl DevnetContext {
             ogmios,
             protocol_params,
             wallet,
-            sync,
+            sync_handle,
             indexer,
         }
     }
@@ -94,12 +105,7 @@ impl DevnetContext {
 
 fn init_tracing() {
     let fmt = tracing_subscriber::fmt::layer().with_filter(EnvFilter::from_default_env());
-    let blocked =
-        TokioBlockedLayer::new().with_warn_busy_single_poll(Some(Duration::from_micros(150)));
-    let _ = tracing_subscriber::registry()
-        .with(fmt)
-        .with(blocked)
-        .try_init();
+    let _ = tracing_subscriber::registry().with(fmt).try_init();
 }
 
 fn get_magic(network: Network) -> u64 {
