@@ -101,9 +101,7 @@ mod test {
         let change_address = context.wallet.address().clone();
         let script_bytes =
             hex::decode("5101010023259800a518a4d136564004ae69").expect("invalid script bytes");
-        // NOTE: we use a V2 tag here and a V3 in the `_without_redeemer` test just so we don't
-        // hit "account already registered" errros from the ledger.
-        let script = Script::new(ScriptKind::PlutusV2, script_bytes.clone());
+        let script = Script::new(ScriptKind::PlutusV3, script_bytes.clone());
 
         // TODO: we should actually extend the ogmios-client to parse the key deposit from the
         // protocol params.
@@ -140,6 +138,24 @@ mod test {
 
         sign_and_submit_tx(context, registration_tx).await?;
 
+        let withdrawal_tx = TxBuilder::new(context.network_id)
+            .change_address(Address::Shelley(change_address.clone()))
+            .withdraw_from_script(
+                0,
+                ScriptKind::PlutusV3,
+                script.bytes.clone(),
+                redeemer,
+                None,
+            )
+            .build(
+                context.indexer.clone(),
+                &context.ogmios,
+                &context.protocol_params,
+            )
+            .await?;
+
+        sign_and_submit_tx(context, withdrawal_tx).await?;
+
         Ok(())
     }
 
@@ -152,7 +168,8 @@ mod test {
         let change_address = context.wallet.address().clone();
         let script_bytes =
             hex::decode("5101010023259800a518a4d136564004ae69").expect("invalid script bytes");
-        let script = Script::new(ScriptKind::PlutusV3, script_bytes.clone());
+        // NOTE: use a different script kind to avoid "already registered" errors in the ledger.
+        let script = Script::new(ScriptKind::PlutusV2, script_bytes.clone());
 
         // TODO: we should actually extend the ogmios-client to parse the key deposit from the
         // protocol params.
@@ -189,10 +206,6 @@ mod test {
 
         Ok(())
     }
-
-    #[test_context(DevnetContext)]
-    #[serial]
-    #[tokio::test]
     async fn spend_specific_output(context: &mut DevnetContext) -> anyhow::Result<()> {
         let change_address = context.wallet.address().clone();
 

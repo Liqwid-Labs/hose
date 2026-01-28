@@ -14,7 +14,9 @@ use pallas::ledger::primitives::conway::LanguageView;
 use tokio::sync::Mutex;
 
 use crate::builder::coin_selection::{get_input_assets, get_input_lovelace};
-use crate::primitives::{Certificate, ExUnits, Hash, Input, Output, ScriptKind, TxHash};
+use crate::primitives::{
+    Certificate, ExUnits, Hash, Input, Output, RewardAccount, ScriptKind, TxHash,
+};
 use crate::wallet::Wallet;
 
 pub mod coin_selection;
@@ -101,7 +103,24 @@ impl TxBuilder {
         }
         self
     }
-
+    pub fn withdraw_from_script(
+        mut self,
+        amount: u64,
+        script_kind: ScriptKind,
+        script_bytes: Vec<u8>,
+        redeemer: Vec<u8>,
+        ex_units: Option<ExUnits>,
+    ) -> Self {
+        let script_hash = script_kind.hash(&script_bytes);
+        let network_id = self.body.network_id.unwrap_or(0);
+        let reward_account =
+            RewardAccount::from_script_hash_with_network_id(network_id, script_hash);
+        self.body = self.body.withdrawal(reward_account.clone(), amount);
+        self.body = self.body.add_reward_redeemer(reward_account, redeemer, ex_units);
+        self.body = self.body.script(script_kind, script_bytes);
+        self.script_kinds.insert(script_kind);
+        self
+    }
     /// Add a read-only input to the transaction which won't be consumed, but can be inspected by
     /// scripts. Perfect for oracles, shared state, etc.
     pub fn add_reference_input(mut self, input: Input) -> Self {

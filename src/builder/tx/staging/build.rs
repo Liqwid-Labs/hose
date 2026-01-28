@@ -14,7 +14,9 @@ use pallas::ledger::primitives::{Fragment, KeepRaw, NonEmptySet};
 use pallas::ledger::traverse::ComputeHash;
 
 use crate::builder::tx::{BuiltTransaction, StagingTransaction, TxBuilderError};
-use crate::primitives::{Certificate, ExUnits, Hash, Output, RedeemerPurpose, ScriptKind};
+use crate::primitives::{
+    Certificate, ExUnits, Hash, Output, RedeemerPurpose, RewardAccount, ScriptKind,
+};
 
 impl StagingTransaction {
     pub fn build_conway(
@@ -77,6 +79,17 @@ impl StagingTransaction {
             }
         } else {
             None
+        };
+
+        let withdrawals = if self.withdrawals.is_empty() {
+            None
+        } else {
+            Some(
+                self.withdrawals
+                    .iter()
+                    .map(|(account, amount)| (account.clone().into(), *amount))
+                    .collect(),
+            )
         };
 
         let collateral_return = self
@@ -176,6 +189,11 @@ impl StagingTransaction {
             .map(|cert| cert.script_hash())
             .collect::<Vec<_>>();
 
+        let withdrawal_accounts = self
+            .withdrawals
+            .keys()
+            .cloned()
+            .collect::<Vec<RewardAccount>>();
         let mut redeemers = vec![];
 
         if let Some(rdmrs) = self.redeemers {
@@ -261,6 +279,20 @@ impl StagingTransaction {
                             ex_units,
                         })
                     }
+                    RedeemerPurpose::Reward(reward_account) => {
+                        let index = withdrawal_accounts
+                            .iter()
+                            .position(|account| account == reward_account)
+                            .ok_or(TxBuilderError::RedeemerTargetMissing)?
+                            as u32;
+
+                        redeemers.push(Redeemer {
+                            tag: RedeemerTag::Reward,
+                            index,
+                            data,
+                            ex_units,
+                        })
+                    }
                 }
             }
         };
@@ -294,7 +326,7 @@ impl StagingTransaction {
                 validity_interval_start: self.valid_from_slot,
                 fee: self.fee.unwrap_or_default(),
                 certificates,
-                withdrawals: None,
+                withdrawals,
                 auxiliary_data_hash: None, // TODO (accept user input)
                 mint,
                 script_data_hash,
