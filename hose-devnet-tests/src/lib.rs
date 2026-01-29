@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use anyhow::Context as _;
+    use anyhow::Context;
     use hose::builder::TxBuilder;
     use hose::primitives::{Output, Script, ScriptKind};
     use hose_devnet::prelude::*;
@@ -9,7 +9,31 @@ mod test {
         Address, Network, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart,
     };
     use pallas::ledger::primitives::NetworkId;
+    use std::time::{SystemTime, UNIX_EPOCH};
     use tracing::info;
+    use uplc::Fragment;
+    use uplc::tx::to_plutus_data::ToPlutusData;
+    use uplc::tx::apply_params_to_script;
+
+    // FIXME: move to a utils module
+    fn nonced_always_succeeds_script_bytes() -> anyhow::Result<Vec<u8>> {
+        // This is just an always succeeds that takes an integer as a parameter and ignores it.
+        let base_script_bytes = hex::decode("5601010022332259800a518a4d136564008ae68dd68011")?;
+        // We apply the unix time as the nonce just so we have a different script for each run,
+        // which avoids problems with rewards accounts (that cannot be registered twice in a row).
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)?
+            // Theoretically unsafe, but  will fit into a u64 for the next few million years :)
+            .as_millis() as u64;
+
+        let params = vec![nonce].to_plutus_data();
+        let params_bytes = params
+            .encode_fragment()
+            .map_err(|err| anyhow::anyhow!("failed to encode params: {err:?}"))?;
+        let script_bytes = apply_params_to_script(&params_bytes, &base_script_bytes)
+            .map_err(|err| anyhow::anyhow!("failed to apply params to script: {err:?}"))?;
+        Ok(script_bytes)
+    }
 
     #[hose_devnet::test]
     async fn basic_tx(context: &mut DevnetContext) -> anyhow::Result<()> {
@@ -62,8 +86,7 @@ mod test {
         context: &mut DevnetContext,
     ) -> anyhow::Result<()> {
         let change_address = context.wallet.address().clone();
-        let script_bytes =
-            hex::decode("5101010023259800a518a4d136564004ae69").expect("invalid script bytes");
+        let script_bytes = nonced_always_succeeds_script_bytes()?;
 
         let redeemer = hex::decode("00").unwrap();
 
@@ -117,11 +140,8 @@ mod test {
         context: &mut DevnetContext,
     ) -> anyhow::Result<()> {
         let change_address = context.wallet.address().clone();
-        let script_bytes =
-            hex::decode("5101010023259800a518a4d136564004ae69").expect("invalid script bytes");
-        // NOTE: use a different script kind to avoid "already registered" errors in the ledger.
-
-        let script_kind = ScriptKind::PlutusV2;
+        let script_bytes = nonced_always_succeeds_script_bytes()?;
+        let script_kind = ScriptKind::PlutusV3;
         let script_hash = script_kind.hash(&script_bytes);
         let registration_tx = TxBuilder::new(context.network_id)
             .change_address(Address::Shelley(change_address.clone()))

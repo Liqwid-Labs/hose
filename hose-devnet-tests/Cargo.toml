@@ -18,3 +18,4 @@ hose = { path = "../hose" }
 hydrant = { git = "https://github.com/liqwid-labs/hydrant" }
 ogmios-client = { workspace = true }
 pallas = { git = "https://github.com/txpipe/pallas", features = ["unstable"] }
+uplc = "1.1.21"
