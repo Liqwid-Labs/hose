@@ -1,50 +1,18 @@
 #[cfg(test)]
-pub mod util;
-
-#[cfg(test)]
-pub mod context;
-
-#[cfg(test)]
 mod test {
     use anyhow::Context as _;
-    use hose::builder::{BuiltTx, TxBuilder};
+    use hose::builder::TxBuilder;
     use hose::primitives::{Output, Script, ScriptKind};
-    use ogmios_client::method::submit::SubmitResult;
+    use hose_devnet::prelude::*;
+    use pallas::codec::minicbor;
     use pallas::ledger::addresses::{
         Address, Network, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart,
     };
     use pallas::ledger::primitives::NetworkId;
     use serde_json::Value;
-    use serial_test::serial;
-    use test_context::test_context;
-    use tracing::{debug, info};
+    use tracing::info;
 
-    use crate::devnet_tests::context::DevnetContext;
-    use crate::devnet_tests::util;
-
-    async fn sign_and_submit_tx(
-        context: &mut DevnetContext,
-        tx: BuiltTx,
-    ) -> anyhow::Result<(BuiltTx, SubmitResult)> {
-        let signed = tx.sign(&context.wallet)?;
-        info!("Submitting transaction: {}", signed.hash()?);
-        match context.ogmios.submit(&signed.cbor()).await {
-            Ok(res) => {
-                debug!("Submitted transaction: {:?}", res.transaction.id);
-                assert_eq!(res.transaction.id, signed.hash()?.to_string());
-                util::wait_until_tx_is_included(context, signed.hash()?).await?;
-                Ok((signed, res))
-            }
-            Err(e) => {
-                info!("Failed transaction CBOR: {:?}", signed.cbor_hex());
-                Err(anyhow::anyhow!("Failed to submit transaction: {:?}", e))
-            }
-        }
-    }
-
-    #[test_context(DevnetContext)]
-    #[serial]
-    #[tokio::test]
+    #[hose_devnet::test]
     async fn basic_tx(context: &mut DevnetContext) -> anyhow::Result<()> {
         let change_address = context.wallet.address().clone();
         let tx = TxBuilder::new(context.network_id)
@@ -60,14 +28,12 @@ mod test {
             )
             .await?;
 
-        let (_signed, _res) = sign_and_submit_tx(context, tx).await?;
+        let (_signed, _res) = context.sign_and_submit_tx(tx).await?;
 
         Ok(())
     }
 
-    #[test_context(DevnetContext)]
-    #[serial]
-    #[tokio::test]
+    #[hose_devnet::test]
     async fn utxo_with_datum(context: &mut DevnetContext) -> anyhow::Result<()> {
         let change_address = context.wallet.address().clone();
         let cbor = minicbor::to_vec(42)?;
@@ -87,14 +53,12 @@ mod test {
             )
             .await?;
 
-        let (_signed, _res) = sign_and_submit_tx(context, tx).await?;
+        let (_signed, _res) = context.sign_and_submit_tx(tx).await?;
 
         Ok(())
     }
 
-    #[test_context(DevnetContext)]
-    #[serial]
-    #[tokio::test]
+    #[hose_devnet::test]
     async fn register_and_withdraw_zero_script_reward(
         context: &mut DevnetContext,
     ) -> anyhow::Result<()> {
@@ -136,7 +100,7 @@ mod test {
             )
             .await?;
 
-        sign_and_submit_tx(context, registration_tx).await?;
+        context.sign_and_submit_tx(registration_tx).await?;
 
         let withdrawal_tx = TxBuilder::new(context.network_id)
             .change_address(Address::Shelley(change_address.clone()))
@@ -154,14 +118,12 @@ mod test {
             )
             .await?;
 
-        sign_and_submit_tx(context, withdrawal_tx).await?;
+        context.sign_and_submit_tx(withdrawal_tx).await?;
 
         Ok(())
     }
 
-    #[test_context(DevnetContext)]
-    #[serial]
-    #[tokio::test]
+    #[hose_devnet::test]
     async fn register_script_stake_without_redeemer(
         context: &mut DevnetContext,
     ) -> anyhow::Result<()> {
@@ -202,10 +164,12 @@ mod test {
             )
             .await?;
 
-        sign_and_submit_tx(context, registration_tx).await?;
+        context.sign_and_submit_tx(registration_tx).await?;
 
         Ok(())
     }
+
+    #[hose_devnet::test]
     async fn spend_specific_output(context: &mut DevnetContext) -> anyhow::Result<()> {
         let change_address = context.wallet.address().clone();
 
@@ -223,7 +187,7 @@ mod test {
                 )
                 .await?;
 
-            let (signed, _res) = sign_and_submit_tx(context, tx).await?;
+            let (signed, _res) = context.sign_and_submit_tx(tx).await?;
 
             let output_idx = signed
                 .body()
@@ -238,7 +202,7 @@ mod test {
                     output_idx as u64,
                 );
 
-            util::wait_until_utxo_exists(context, output_pointer.clone()).await?;
+            hose_devnet::wait_until_utxo_exists(context, output_pointer.clone()).await?;
             (signed, output_pointer)
         };
 
@@ -253,15 +217,13 @@ mod test {
                 )
                 .await?;
 
-            sign_and_submit_tx(context, tx).await?
+            context.sign_and_submit_tx(tx).await?
         };
 
         Ok(())
     }
 
-    #[test_context(DevnetContext)]
-    #[serial]
-    #[tokio::test]
+    #[hose_devnet::test]
     async fn spend_from_always_succeeds_script(context: &mut DevnetContext) -> anyhow::Result<()> {
         let change_address = context.wallet.address().clone();
         let script_bytes =
@@ -291,7 +253,7 @@ mod test {
                 )
                 .await?;
 
-            let (signed, _res) = sign_and_submit_tx(context, tx).await?;
+            let (signed, _res) = context.sign_and_submit_tx(tx).await?;
 
             let output_idx = signed
                 .body()
@@ -327,15 +289,13 @@ mod test {
                 )
                 .await?;
 
-            sign_and_submit_tx(context, tx).await?;
+            context.sign_and_submit_tx(tx).await?;
         }
 
         Ok(())
     }
 
-    #[test_context(DevnetContext)]
-    #[serial]
-    #[tokio::test]
+    #[hose_devnet::test]
     async fn chain_spend(context: &mut DevnetContext) -> anyhow::Result<()> {
         const NUM_TXS: u64 = 50;
         const AMOUNT_STEP: u64 = 1_000_000;
@@ -393,7 +353,7 @@ mod test {
                 )
                 .await?;
 
-            let (signed, _) = sign_and_submit_tx(context, tx).await?;
+            let (signed, _) = context.sign_and_submit_tx(tx).await?;
 
             // Identify the output to spend in the next iteration.
             // We look for the output with the specific amount we set.

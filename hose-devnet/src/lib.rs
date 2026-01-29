@@ -1,9 +1,15 @@
-use hex;
+pub mod config;
+pub mod context;
+pub use context::DevnetContext;
 use hose::primitives::TxHash;
+pub use hose_devnet_macros::test;
 use hydrant::primitives::TxOutputPointer;
 use tracing::debug;
+pub use {serial_test, test_context, tokio};
 
-use crate::devnet_tests::context::DevnetContext;
+pub mod prelude {
+    pub use super::{DevnetContext, serial_test, test, test_context, tokio};
+}
 
 pub async fn wait_n_slots(_context: &DevnetContext, n: u64) -> anyhow::Result<()> {
     // TODO: Use ogmios API to check slots
@@ -15,13 +21,13 @@ pub async fn wait_n_slots(_context: &DevnetContext, n: u64) -> anyhow::Result<()
 }
 
 pub async fn wait_until_utxo_exists(
-    context: &mut DevnetContext,
+    context: &DevnetContext,
     output_pointer: TxOutputPointer,
 ) -> anyhow::Result<()> {
     loop {
         debug!(
             "Waiting for utxo to exist: {}#{}",
-            hex::encode(output_pointer.hash.as_ref()),
+            output_pointer.hash.to_hex(),
             output_pointer.index
         );
         {
@@ -35,7 +41,7 @@ pub async fn wait_until_utxo_exists(
 }
 
 pub async fn wait_until_tx_is_included(
-    context: &mut DevnetContext,
+    context: &DevnetContext,
     tx_hash: TxHash,
 ) -> anyhow::Result<()> {
     // A transaction always has at least one output, so we can use the first output as a pointer.us

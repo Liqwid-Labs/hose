@@ -2,10 +2,12 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use clap::Parser as _;
+use hose::builder::BuiltTx;
 use hose::wallet::{Wallet, WalletBuilder};
 use hydrant::UtxoIndexer;
 use ogmios_client::OgmiosHttpClient;
 use ogmios_client::method::pparams::ProtocolParams;
+use ogmios_client::method::submit::SubmitResult;
 use pallas::ledger::addresses::Network;
 use pallas::ledger::primitives::NetworkId;
 use pallas::network::facades::PeerClient;
@@ -13,7 +15,7 @@ use test_context::AsyncTestContext;
 use tokio::sync::Mutex;
 use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
-use tracing_subscriber::{EnvFilter, Layer};
+use tracing_subscriber::{EnvFilter, Layer as _};
 use url::Url;
 
 use crate::config::{self, Config};
@@ -99,6 +101,23 @@ impl DevnetContext {
             wallet,
             sync_handle,
             indexer,
+        }
+    }
+
+    pub async fn sign_and_submit_tx(&self, tx: BuiltTx) -> anyhow::Result<(BuiltTx, SubmitResult)> {
+        let signed = tx.sign(&self.wallet)?;
+        tracing::info!("Submitting transaction: {}", signed.hash()?);
+        match self.ogmios.submit(&signed.cbor()).await {
+            Ok(res) => {
+                tracing::debug!("Submitted transaction: {:?}", res.transaction.id);
+                assert_eq!(res.transaction.id, signed.hash()?.to_string());
+                crate::wait_until_tx_is_included(self, signed.hash()?).await?;
+                Ok((signed, res))
+            }
+            Err(e) => {
+                tracing::info!("Failed transaction CBOR: {:?}", signed.cbor_hex());
+                Err(anyhow::anyhow!("Failed to submit transaction: {:?}", e))
+            }
         }
     }
 }

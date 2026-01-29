@@ -1,0 +1,12 @@
+[package]
+name = "hose-devnet-macros"
+description = "Macro crate for devnet tests with Hose"
+edition = "2024"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1.0"
+syn = { version = "2", features = ["full"] }
+proc-macro2 = "1.0"
