@@ -1,8 +1,8 @@
 use pallas::ledger::addresses::{
     Address as PallasAddress, Network, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart,
 };
-use pallas::ledger::primitives::conway::{Certificate as PallasCertificate, RedeemerTag, Tx};
 use pallas::ledger::primitives::Fragment;
+use pallas::ledger::primitives::conway::{Certificate as PallasCertificate, RedeemerTag, Tx};
 
 use super::StagingTransaction;
 use crate::primitives::{Certificate, Hash, Output, RewardAccount};
@@ -61,9 +61,11 @@ fn build_includes_registration_certificate_and_redeemer() {
         pallas::ledger::primitives::conway::Redeemers::List(list) => list,
         _ => panic!("unexpected redeemer format"),
     };
-    assert!(redeemers
-        .iter()
-        .any(|r| r.tag == RedeemerTag::Cert && r.index == 0));
+    assert!(
+        redeemers
+            .iter()
+            .any(|r| r.tag == RedeemerTag::Cert && r.index == 0)
+    );
 }
 
 #[test]
@@ -85,10 +87,8 @@ fn build_includes_withdrawal_and_reward_redeemer() {
         .withdrawals
         .as_ref()
         .expect("withdrawals missing");
-    let withdrawals_vec: Vec<(pallas::codec::utils::Bytes, u64)> = withdrawals
-        .iter()
-        .map(|(k, v)| (k.clone(), *v))
-        .collect();
+    let withdrawals_vec: Vec<(pallas::codec::utils::Bytes, u64)> =
+        withdrawals.iter().map(|(k, v)| (k.clone(), *v)).collect();
     assert_eq!(withdrawals_vec.len(), 1);
     let expected_account: pallas::codec::utils::Bytes = reward_account.into();
     assert_eq!(withdrawals_vec[0], (expected_account, 0));
@@ -102,7 +102,9 @@ fn build_includes_withdrawal_and_reward_redeemer() {
         pallas::ledger::primitives::conway::Redeemers::List(list) => list,
         _ => panic!("unexpected redeemer format"),
     };
-    assert!(redeemers
-        .iter()
-        .any(|r| r.tag == RedeemerTag::Reward && r.index == 0));
+    assert!(
+        redeemers
+            .iter()
+            .any(|r| r.tag == RedeemerTag::Reward && r.index == 0)
+    );
 }

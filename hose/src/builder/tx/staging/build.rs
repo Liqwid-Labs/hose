@@ -7,8 +7,8 @@ use pallas::codec::utils::Bytes;
 use pallas::crypto::hash::Hash as PallasHash;
 use pallas::ledger::primitives::conway::{
     Certificate as PallasCertificate, ExUnits as PallasExUnits, Multiasset, NativeScript,
-    NetworkId, NonZeroInt, PlutusData, PlutusScript, Redeemer, RedeemerTag, ScriptHash, StakeCredential as PallasStakeCredential,
-    TransactionBody, TransactionInput, Tx, WitnessSet,
+    NetworkId, NonZeroInt, PlutusData, PlutusScript, Redeemer, RedeemerTag, ScriptHash,
+    StakeCredential as PallasStakeCredential, TransactionBody, TransactionInput, Tx, WitnessSet,
 };
 use pallas::ledger::primitives::{Fragment, KeepRaw, NonEmptySet};
 use pallas::ledger::traverse::ComputeHash;
@@ -159,24 +159,24 @@ impl StagingTransaction {
                 .iter()
                 .map(|cert| match cert {
                     // TODO: handle key credentials as well
-                    Certificate::StakeRegistrationScript { script_hash, deposit } => {
+                    Certificate::StakeRegistrationScript {
+                        script_hash,
+                        deposit,
+                    } => {
                         let cert_hash = *script_hash;
                         let script_hash: ScriptHash = cert_hash.into();
-                        let has_cert_redeemer = self
-                            .redeemers
-                            .as_ref()
-                            .map_or(false, |rdmrs| {
-                                rdmrs.contains_key(&RedeemerPurpose::Cert(cert_hash))
-                            });
+                        let has_cert_redeemer = self.redeemers.as_ref().map_or(false, |rdmrs| {
+                            rdmrs.contains_key(&RedeemerPurpose::Cert(cert_hash))
+                        });
                         if has_cert_redeemer {
                             PallasCertificate::Reg(
                                 PallasStakeCredential::ScriptHash(script_hash),
                                 *deposit,
                             )
                         } else {
-                            PallasCertificate::StakeRegistration(
-                                PallasStakeCredential::ScriptHash(script_hash),
-                            )
+                            PallasCertificate::StakeRegistration(PallasStakeCredential::ScriptHash(
+                                script_hash,
+                            ))
                         }
                     }
                 })

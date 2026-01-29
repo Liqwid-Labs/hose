@@ -106,13 +106,7 @@ mod test {
 
         let withdrawal_tx = TxBuilder::new(context.network_id)
             .change_address(Address::Shelley(change_address.clone()))
-            .withdraw_from_script(
-                script_hash,
-                script_kind,
-                0,
-                redeemer,
-                None,
-            )
+            .withdraw_from_script(script_hash, script_kind, 0, redeemer, None)
             .add_script(script_kind, script_bytes.clone())
             .build(
                 context.indexer.clone(),
@@ -154,13 +148,7 @@ mod test {
         let script_hash = script_kind.hash(&script_bytes);
         let registration_tx = TxBuilder::new(context.network_id)
             .change_address(Address::Shelley(change_address.clone()))
-            .register_script_stake(
-                script_hash,
-                script_kind,
-                None,
-                None,
-                key_deposit,
-            )
+            .register_script_stake(script_hash, script_kind, None, None, key_deposit)
             .build(
                 context.indexer.clone(),
                 &context.ogmios,

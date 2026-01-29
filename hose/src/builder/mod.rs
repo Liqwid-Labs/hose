@@ -97,10 +97,12 @@ impl TxBuilder {
         // it from ogmios-client.
         deposit: u64,
     ) -> Self {
-        self.body = self.body.add_certificate(Certificate::StakeRegistrationScript {
-            script_hash,
-            deposit,
-        });
+        self.body = self
+            .body
+            .add_certificate(Certificate::StakeRegistrationScript {
+                script_hash,
+                deposit,
+            });
         if let Some(redeemer) = redeemer {
             // if a redeemer was provided, we attach the script and its ex_units as well
             self.body = self.body.add_cert_redeemer(script_hash, redeemer, ex_units);
@@ -127,7 +129,9 @@ impl TxBuilder {
         let reward_account =
             RewardAccount::from_script_hash_with_network_id(network_id, script_hash);
         self.body = self.body.withdrawal(reward_account.clone(), amount);
-        self.body = self.body.add_reward_redeemer(reward_account, redeemer, ex_units);
+        self.body = self
+            .body
+            .add_reward_redeemer(reward_account, redeemer, ex_units);
         self.script_kinds.insert(script_kind);
         self
     }

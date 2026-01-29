@@ -76,11 +76,9 @@ pub async fn select_coins(
     let min_change_lovelace = pparams.min_utxo_deposit_coefficient * 500;
     let deposit_lovelace = get_certificate_deposit(tx);
     let withdrawal_lovelace = get_withdrawal_lovelace(tx);
-    let mut required_lovelace = (get_output_lovelace(tx)
-        + fee
-        + min_change_lovelace
-        + deposit_lovelace)
-        .saturating_sub(input_lovelace + withdrawal_lovelace);
+    let mut required_lovelace =
+        (get_output_lovelace(tx) + fee + min_change_lovelace + deposit_lovelace)
+            .saturating_sub(input_lovelace + withdrawal_lovelace);
     let mut required_assets: AssetsDelta =
         get_output_assets(tx).saturating_sub(input_assets).into();
 

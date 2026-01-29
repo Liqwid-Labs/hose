@@ -290,10 +290,7 @@ impl StagingTransaction {
         ex_units: Option<ExUnits>,
     ) -> Self {
         let mut rdmrs = self.redeemers.unwrap_or_default();
-        rdmrs.insert(
-            RedeemerPurpose::Cert(script_hash),
-            (plutus_data, ex_units),
-        );
+        rdmrs.insert(RedeemerPurpose::Cert(script_hash), (plutus_data, ex_units));
         self.redeemers = Some(rdmrs);
 
         self
@@ -307,8 +304,7 @@ impl StagingTransaction {
     }
 
     pub fn remove_certificate_by_script_hash(mut self, script_hash: Hash<28>) -> Self {
-        self.certificates
-            .retain(|c| c.script_hash() != script_hash);
+        self.certificates.retain(|c| c.script_hash() != script_hash);
         self
     }
 
