@@ -78,10 +78,17 @@ impl TxBuilder {
         self
     }
 
+    /// Register a script's reward account and lock some lovelace as a deposit, so it can be
+    /// withdrawn from in later transactions.
+    ///
+    /// Note that as of Jan 2026, script's aren't evaluated when they're registered (and so a
+    /// redeemer is optional), but they will be in the future.
+    ///
+    /// The deposit amount can be retrieved from the protocol parameters.
     pub fn register_script_stake(
         mut self,
+        script_hash: Hash<28>,
         script_kind: ScriptKind,
-        script_bytes: Vec<u8>,
         // NOTE: Right now, redeemers and script execution aren't required by the ledger, but the
         // Conway CDDL mandates them and they'll become necessary after the next hard fork.
         redeemer: Option<Vec<u8>>,
@@ -90,7 +97,6 @@ impl TxBuilder {
         // it from ogmios-client.
         deposit: u64,
     ) -> Self {
-        let script_hash = script_kind.hash(&script_bytes);
         self.body = self.body.add_certificate(Certificate::StakeRegistrationScript {
             script_hash,
             deposit,
@@ -98,26 +104,30 @@ impl TxBuilder {
         if let Some(redeemer) = redeemer {
             // if a redeemer was provided, we attach the script and its ex_units as well
             self.body = self.body.add_cert_redeemer(script_hash, redeemer, ex_units);
-            self.body = self.body.script(script_kind, script_bytes);
             self.script_kinds.insert(script_kind);
         }
         self
     }
+
+    /// Withdraw rewards from a script's reward account. Note that the account must have been
+    /// registered beforehand with `register_script_stake`.
+    ///
+    /// FIXME: according to the ledger rules, it's only possible to withdraw the entire amount of
+    /// rewards accrued in the account. We should probably query for this balance and fill the
+    /// amount automatically.
     pub fn withdraw_from_script(
         mut self,
-        amount: u64,
+        script_hash: Hash<28>,
         script_kind: ScriptKind,
-        script_bytes: Vec<u8>,
+        amount: u64,
         redeemer: Vec<u8>,
         ex_units: Option<ExUnits>,
     ) -> Self {
-        let script_hash = script_kind.hash(&script_bytes);
         let network_id = self.body.network_id.unwrap_or(0);
         let reward_account =
             RewardAccount::from_script_hash_with_network_id(network_id, script_hash);
         self.body = self.body.withdrawal(reward_account.clone(), amount);
         self.body = self.body.add_reward_redeemer(reward_account, redeemer, ex_units);
-        self.body = self.body.script(script_kind, script_bytes);
         self.script_kinds.insert(script_kind);
         self
     }

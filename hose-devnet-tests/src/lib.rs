@@ -65,7 +65,6 @@ mod test {
         let change_address = context.wallet.address().clone();
         let script_bytes =
             hex::decode("5101010023259800a518a4d136564004ae69").expect("invalid script bytes");
-        let script = Script::new(ScriptKind::PlutusV3, script_bytes.clone());
 
         // TODO: we should actually extend the ogmios-client to parse the key deposit from the
         // protocol params.
@@ -84,15 +83,18 @@ mod test {
 
         let redeemer = hex::decode("00").unwrap();
 
+        let script_kind = ScriptKind::PlutusV3;
+        let script_hash = script_kind.hash(&script_bytes);
         let registration_tx = TxBuilder::new(context.network_id)
             .change_address(Address::Shelley(change_address.clone()))
             .register_script_stake(
-                ScriptKind::PlutusV3,
-                script.bytes.clone(),
+                script_hash,
+                script_kind,
                 Some(redeemer.clone()),
                 None,
                 key_deposit,
             )
+            .add_script(script_kind, script_bytes.clone())
             .build(
                 context.indexer.clone(),
                 &context.ogmios,
@@ -105,12 +107,13 @@ mod test {
         let withdrawal_tx = TxBuilder::new(context.network_id)
             .change_address(Address::Shelley(change_address.clone()))
             .withdraw_from_script(
+                script_hash,
+                script_kind,
                 0,
-                ScriptKind::PlutusV3,
-                script.bytes.clone(),
                 redeemer,
                 None,
             )
+            .add_script(script_kind, script_bytes.clone())
             .build(
                 context.indexer.clone(),
                 &context.ogmios,
@@ -131,7 +134,6 @@ mod test {
         let script_bytes =
             hex::decode("5101010023259800a518a4d136564004ae69").expect("invalid script bytes");
         // NOTE: use a different script kind to avoid "already registered" errors in the ledger.
-        let script = Script::new(ScriptKind::PlutusV2, script_bytes.clone());
 
         // TODO: we should actually extend the ogmios-client to parse the key deposit from the
         // protocol params.
@@ -148,11 +150,13 @@ mod test {
                 .context("missing protocolParams.keyDeposit")?
         };
 
+        let script_kind = ScriptKind::PlutusV2;
+        let script_hash = script_kind.hash(&script_bytes);
         let registration_tx = TxBuilder::new(context.network_id)
             .change_address(Address::Shelley(change_address.clone()))
             .register_script_stake(
-                ScriptKind::PlutusV2,
-                script.bytes.clone(),
+                script_hash,
+                script_kind,
                 None,
                 None,
                 key_deposit,
