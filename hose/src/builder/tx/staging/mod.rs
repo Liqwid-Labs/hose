@@ -303,6 +303,26 @@ impl StagingTransaction {
         self
     }
 
+    pub fn apply_stake_credential_deposit(mut self, deposit: u64) -> Self {
+        for cert in &mut self.certificates {
+            match cert {
+                Certificate::StakeRegistrationScript {
+                    deposit: cert_deposit,
+                    ..
+                } => {
+                    *cert_deposit = Some(deposit);
+                }
+                Certificate::StakeDeregistrationScript {
+                    deposit: cert_deposit,
+                    ..
+                } => {
+                    *cert_deposit = Some(deposit);
+                }
+            }
+        }
+        self
+    }
+
     pub fn remove_certificate_by_script_hash(mut self, script_hash: Hash<28>) -> Self {
         self.certificates.retain(|c| c.script_hash() != script_hash);
         self

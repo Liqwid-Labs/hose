@@ -44,7 +44,7 @@ pub fn get_registration_deposit(tx: &StagingTransaction) -> u64 {
     tx.certificates
         .iter()
         .filter_map(|cert| match cert {
-            Certificate::StakeRegistrationScript { deposit, .. } => Some(*deposit),
+            Certificate::StakeRegistrationScript { deposit, .. } => *deposit,
             Certificate::StakeDeregistrationScript { .. } => None,
         })
         .sum()
@@ -55,7 +55,7 @@ pub fn get_deregistration_refund(tx: &StagingTransaction) -> u64 {
         .iter()
         .filter_map(|cert| match cert {
             Certificate::StakeRegistrationScript { .. } => None,
-            Certificate::StakeDeregistrationScript { deposit, .. } => Some(*deposit),
+            Certificate::StakeDeregistrationScript { deposit, .. } => *deposit,
         })
         .sum()
 }
@@ -95,11 +95,9 @@ pub async fn select_coins(
     let registration_deposit = get_registration_deposit(tx);
     let deregistration_refund = get_deregistration_refund(tx);
     let withdrawal_lovelace = get_withdrawal_lovelace(tx);
-    let required_lovelace = (get_output_lovelace(tx)
-        + fee
-        + min_change_lovelace
-        + registration_deposit)
-        .saturating_sub(input_lovelace + withdrawal_lovelace + deregistration_refund);
+    let required_lovelace =
+        (get_output_lovelace(tx) + fee + min_change_lovelace + registration_deposit)
+            .saturating_sub(input_lovelace + withdrawal_lovelace + deregistration_refund);
     let mut required_lovelace = required_lovelace;
     let mut required_assets: AssetsDelta =
         get_output_assets(tx).saturating_sub(input_assets).into();

@@ -9,7 +9,6 @@ mod test {
         Address, Network, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart,
     };
     use pallas::ledger::primitives::NetworkId;
-    use serde_json::Value;
     use tracing::info;
 
     #[hose_devnet::test]
@@ -66,34 +65,13 @@ mod test {
         let script_bytes =
             hex::decode("5101010023259800a518a4d136564004ae69").expect("invalid script bytes");
 
-        // TODO: we should actually extend the ogmios-client to parse the key deposit from the
-        // protocol params.
-        let key_deposit = {
-            let genesis_path = context
-                .config
-                .genesis_shelley_path
-                .as_ref()
-                .context("genesis_shelley_path not set")?;
-            let genesis_str = std::fs::read_to_string(genesis_path)?;
-            let genesis_json: Value = serde_json::from_str(&genesis_str)?;
-            genesis_json["protocolParams"]["keyDeposit"]
-                .as_u64()
-                .context("missing protocolParams.keyDeposit")?
-        };
-
         let redeemer = hex::decode("00").unwrap();
 
         let script_kind = ScriptKind::PlutusV3;
         let script_hash = script_kind.hash(&script_bytes);
         let registration_tx = TxBuilder::new(context.network_id)
             .change_address(Address::Shelley(change_address.clone()))
-            .register_script_stake(
-                script_hash,
-                script_kind,
-                Some(redeemer.clone()),
-                None,
-                key_deposit,
-            )
+            .register_script_stake(script_hash, script_kind, Some(redeemer.clone()), None)
             .add_script(script_kind, script_bytes.clone())
             .build(
                 context.indexer.clone(),
@@ -116,14 +94,11 @@ mod test {
             .await?;
 
         let (_, withdrawal_tx_id) = context.sign_and_submit_tx(withdrawal_tx).await?;
-        info!(
-            "Withdrawal tx hash: {}",
-            withdrawal_tx_id.transaction.id
-        );
+        info!("Withdrawal tx hash: {}", withdrawal_tx_id.transaction.id);
 
         let deregistration_tx = TxBuilder::new(context.network_id)
             .change_address(Address::Shelley(change_address.clone()))
-            .deregister_script_stake(script_hash, script_kind, redeemer, None, key_deposit)
+            .deregister_script_stake(script_hash, script_kind, redeemer, None)
             .add_script(script_kind, script_bytes.clone())
             .build(
                 context.indexer.clone(),
@@ -146,26 +121,11 @@ mod test {
             hex::decode("5101010023259800a518a4d136564004ae69").expect("invalid script bytes");
         // NOTE: use a different script kind to avoid "already registered" errors in the ledger.
 
-        // TODO: we should actually extend the ogmios-client to parse the key deposit from the
-        // protocol params.
-        let key_deposit = {
-            let genesis_path = context
-                .config
-                .genesis_shelley_path
-                .as_ref()
-                .context("genesis_shelley_path not set")?;
-            let genesis_str = std::fs::read_to_string(genesis_path)?;
-            let genesis_json: Value = serde_json::from_str(&genesis_str)?;
-            genesis_json["protocolParams"]["keyDeposit"]
-                .as_u64()
-                .context("missing protocolParams.keyDeposit")?
-        };
-
         let script_kind = ScriptKind::PlutusV2;
         let script_hash = script_kind.hash(&script_bytes);
         let registration_tx = TxBuilder::new(context.network_id)
             .change_address(Address::Shelley(change_address.clone()))
-            .register_script_stake(script_hash, script_kind, None, None, key_deposit)
+            .register_script_stake(script_hash, script_kind, None, None)
             .build(
                 context.indexer.clone(),
                 &context.ogmios,

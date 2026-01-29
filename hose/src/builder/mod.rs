@@ -93,15 +93,12 @@ impl TxBuilder {
         // Conway CDDL mandates them and they'll become necessary after the next hard fork.
         redeemer: Option<Vec<u8>>,
         ex_units: Option<ExUnits>,
-        // TODO: we don't really need to pass the deposit, it's a protocol parameter. We should get
-        // it from ogmios-client.
-        deposit: u64,
     ) -> Self {
         self.body = self
             .body
             .add_certificate(Certificate::StakeRegistrationScript {
                 script_hash,
-                deposit,
+                deposit: None,
             });
         if let Some(redeemer) = redeemer {
             // if a redeemer was provided, we attach the script and its ex_units as well
@@ -120,15 +117,12 @@ impl TxBuilder {
         script_kind: ScriptKind,
         redeemer: Vec<u8>,
         ex_units: Option<ExUnits>,
-        // TODO: we don't really need to pass the deposit, it's a protocol parameter. We should get
-        // it from ogmios-client.
-        deposit: u64,
     ) -> Self {
         self.body = self
             .body
             .add_certificate(Certificate::StakeDeregistrationScript {
                 script_hash,
-                deposit,
+                deposit: None,
             });
         self.body = self.body.add_cert_redeemer(script_hash, redeemer, ex_units);
         self.script_kinds.insert(script_kind);
@@ -254,6 +248,9 @@ impl TxBuilder {
                     .language_view(script_kind.clone(), language_view.1);
             }
         }
+        self.body = self
+            .body
+            .apply_stake_credential_deposit(pparams.stake_credential_deposit.lovelace);
 
         let change_address = self
             .change_address

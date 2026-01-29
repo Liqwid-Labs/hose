@@ -169,13 +169,15 @@ impl StagingTransaction {
                             rdmrs.contains_key(&RedeemerPurpose::Cert(cert_hash))
                         });
                         if has_cert_redeemer {
-                            PallasCertificate::Reg(
+                            let deposit =
+                                deposit.ok_or(TxBuilderError::MissingStakeCredentialDeposit)?;
+                            Ok(PallasCertificate::Reg(
                                 PallasStakeCredential::ScriptHash(script_hash),
-                                *deposit,
-                            )
+                                deposit,
+                            ))
                         } else {
-                            PallasCertificate::StakeRegistration(PallasStakeCredential::ScriptHash(
-                                script_hash,
+                            Ok(PallasCertificate::StakeRegistration(
+                                PallasStakeCredential::ScriptHash(script_hash),
                             ))
                         }
                     }
@@ -183,14 +185,16 @@ impl StagingTransaction {
                         script_hash,
                         deposit,
                     } => {
+                        let deposit =
+                            deposit.ok_or(TxBuilderError::MissingStakeCredentialDeposit)?;
                         let script_hash: ScriptHash = (*script_hash).into();
-                        PallasCertificate::UnReg(
+                        Ok(PallasCertificate::UnReg(
                             PallasStakeCredential::ScriptHash(script_hash),
-                            *deposit,
-                        )
+                            deposit,
+                        ))
                     }
                 })
-                .collect(),
+                .collect::<Result<Vec<_>, _>>()?,
         );
 
         let certificate_script_hashes = self

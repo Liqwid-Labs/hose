@@ -16,5 +16,5 @@ serde_json = "1.0"
 hose-devnet = { path = "../hose-devnet" }
 hose = { path = "../hose" }
 hydrant = { git = "https://github.com/liqwid-labs/hydrant" }
-ogmios-client = { git = "https://github.com/liqwid-labs/ogmios-client-rs" }
+ogmios-client = { workspace = true }
 pallas = { git = "https://github.com/txpipe/pallas", features = ["unstable"] }

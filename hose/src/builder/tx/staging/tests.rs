@@ -37,7 +37,7 @@ fn build_includes_registration_certificate_and_redeemer() {
         .output(dummy_output())
         .add_certificate(Certificate::StakeRegistrationScript {
             script_hash,
-            deposit: 2,
+            deposit: Some(2),
         })
         .add_cert_redeemer(script_hash, vec![0u8], None);
 
@@ -77,7 +77,7 @@ fn build_includes_deregistration_certificate_and_redeemer() {
         .output(dummy_output())
         .add_certificate(Certificate::StakeDeregistrationScript {
             script_hash,
-            deposit: 2,
+            deposit: Some(2),
         })
         .add_cert_redeemer(script_hash, vec![0u8], None);
 
