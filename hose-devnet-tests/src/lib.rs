@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod test {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
     use anyhow::Context;
     use hose::builder::TxBuilder;
     use hose::primitives::{Output, Script, ScriptKind};
@@ -9,11 +11,10 @@ mod test {
         Address, Network, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart,
     };
     use pallas::ledger::primitives::NetworkId;
-    use std::time::{SystemTime, UNIX_EPOCH};
     use tracing::info;
     use uplc::Fragment;
-    use uplc::tx::to_plutus_data::ToPlutusData;
     use uplc::tx::apply_params_to_script;
+    use uplc::tx::to_plutus_data::ToPlutusData;
 
     // FIXME: move to a utils module
     fn nonced_always_succeeds_script_bytes() -> anyhow::Result<Vec<u8>> {
