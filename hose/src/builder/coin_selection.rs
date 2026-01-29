@@ -147,11 +147,10 @@ pub async fn select_coins(
         selected_utxos.push(utxo.clone());
     }
 
-    if required_lovelace > 0 || !required_assets.only_positive().is_empty() {
-        return Err(anyhow::anyhow!(
-            "failed to select coins, wallet doesn't contain enough funds"
-        ));
-    }
+    anyhow::ensure!(
+        required_lovelace == 0 && required_assets.only_positive().is_empty(),
+        "failed to select coins, wallet doesn't contain enough funds"
+    );
 
     Ok(selected_utxos)
 }
