@@ -179,6 +179,16 @@ impl StagingTransaction {
                             ))
                         }
                     }
+                    Certificate::StakeDeregistrationScript {
+                        script_hash,
+                        deposit,
+                    } => {
+                        let script_hash: ScriptHash = (*script_hash).into();
+                        PallasCertificate::UnReg(
+                            PallasStakeCredential::ScriptHash(script_hash),
+                            *deposit,
+                        )
+                    }
                 })
                 .collect(),
         );

@@ -69,8 +69,48 @@ fn build_includes_registration_certificate_and_redeemer() {
 }
 
 #[test]
-fn build_includes_withdrawal_and_reward_redeemer() {
+fn build_includes_deregistration_certificate_and_redeemer() {
     let script_hash = Hash([4u8; 28]);
+    let tx = StagingTransaction::new()
+        .network_id(0)
+        .fee(0)
+        .output(dummy_output())
+        .add_certificate(Certificate::StakeDeregistrationScript {
+            script_hash,
+            deposit: 2,
+        })
+        .add_cert_redeemer(script_hash, vec![0u8], None);
+
+    let built = tx.build_conway(None).expect("build conway");
+    let decoded = Tx::decode_fragment(&built.bytes).expect("decode tx");
+
+    let certs = decoded
+        .transaction_body
+        .certificates
+        .as_ref()
+        .expect("certificates missing");
+    let certs_vec: Vec<PallasCertificate> = certs.iter().cloned().collect();
+    assert!(matches!(certs_vec[0], PallasCertificate::UnReg(_, 2)));
+
+    let redeemers = decoded
+        .transaction_witness_set
+        .redeemer
+        .as_ref()
+        .expect("redeemers missing");
+    let redeemers = match &**redeemers {
+        pallas::ledger::primitives::conway::Redeemers::List(list) => list,
+        _ => panic!("unexpected redeemer format"),
+    };
+    assert!(
+        redeemers
+            .iter()
+            .any(|r| r.tag == RedeemerTag::Cert && r.index == 0)
+    );
+}
+
+#[test]
+fn build_includes_withdrawal_and_reward_redeemer() {
+    let script_hash = Hash([5u8; 28]);
     let reward_account = RewardAccount::from_script_hash(Network::Testnet, script_hash);
     let tx = StagingTransaction::new()
         .network_id(0)

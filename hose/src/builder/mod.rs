@@ -111,6 +111,30 @@ impl TxBuilder {
         self
     }
 
+    /// Deregister a script's reward account and refund the deposit.
+    ///
+    /// Note that, unlike registration, deregistration always requires a redeemer.
+    pub fn deregister_script_stake(
+        mut self,
+        script_hash: Hash<28>,
+        script_kind: ScriptKind,
+        redeemer: Vec<u8>,
+        ex_units: Option<ExUnits>,
+        // TODO: we don't really need to pass the deposit, it's a protocol parameter. We should get
+        // it from ogmios-client.
+        deposit: u64,
+    ) -> Self {
+        self.body = self
+            .body
+            .add_certificate(Certificate::StakeDeregistrationScript {
+                script_hash,
+                deposit,
+            });
+        self.body = self.body.add_cert_redeemer(script_hash, redeemer, ex_units);
+        self.script_kinds.insert(script_kind);
+        self
+    }
+
     /// Withdraw rewards from a script's reward account. Note that the account must have been
     /// registered beforehand with `register_script_stake`.
     ///

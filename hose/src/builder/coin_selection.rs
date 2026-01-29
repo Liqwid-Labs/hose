@@ -8,7 +8,7 @@ use pallas::ledger::addresses::Address as PallasAddress;
 use tokio::sync::Mutex;
 
 use crate::builder::{Output, StagingTransaction};
-use crate::primitives::Assets;
+use crate::primitives::{Assets, Certificate};
 
 pub async fn get_input_lovelace(
     indexer: Arc<Mutex<UtxoIndexer>>,
@@ -38,8 +38,26 @@ pub fn get_output_lovelace(tx: &StagingTransaction) -> u64 {
     tx.outputs.iter().map(|output| output.lovelace).sum()
 }
 
-pub fn get_certificate_deposit(tx: &StagingTransaction) -> u64 {
-    tx.certificates.iter().map(|cert| cert.deposit()).sum()
+// registration certificates consume a deposit from the inputs, while deregistration
+// certificates refund them.
+pub fn get_registration_deposit(tx: &StagingTransaction) -> u64 {
+    tx.certificates
+        .iter()
+        .filter_map(|cert| match cert {
+            Certificate::StakeRegistrationScript { deposit, .. } => Some(*deposit),
+            Certificate::StakeDeregistrationScript { .. } => None,
+        })
+        .sum()
+}
+
+pub fn get_deregistration_refund(tx: &StagingTransaction) -> u64 {
+    tx.certificates
+        .iter()
+        .filter_map(|cert| match cert {
+            Certificate::StakeRegistrationScript { .. } => None,
+            Certificate::StakeDeregistrationScript { deposit, .. } => Some(*deposit),
+        })
+        .sum()
 }
 
 pub fn get_withdrawal_lovelace(tx: &StagingTransaction) -> u64 {
@@ -74,11 +92,15 @@ pub async fn select_coins(
     // assume a change output of maximum 500 bytes
     // TODO: technically we should use the actual size of the change output
     let min_change_lovelace = pparams.min_utxo_deposit_coefficient * 500;
-    let deposit_lovelace = get_certificate_deposit(tx);
+    let registration_deposit = get_registration_deposit(tx);
+    let deregistration_refund = get_deregistration_refund(tx);
     let withdrawal_lovelace = get_withdrawal_lovelace(tx);
-    let mut required_lovelace =
-        (get_output_lovelace(tx) + fee + min_change_lovelace + deposit_lovelace)
-            .saturating_sub(input_lovelace + withdrawal_lovelace);
+    let required_lovelace = (get_output_lovelace(tx)
+        + fee
+        + min_change_lovelace
+        + registration_deposit)
+        .saturating_sub(input_lovelace + withdrawal_lovelace + deregistration_refund);
+    let mut required_lovelace = required_lovelace;
     let mut required_assets: AssetsDelta =
         get_output_assets(tx).saturating_sub(input_assets).into();
 
@@ -124,14 +146,12 @@ pub async fn handle_change(
 ) -> anyhow::Result<Option<Output>> {
     // TODO: consider minted assets
     let input_lovelace = get_input_lovelace(indexer.clone(), tx).await?;
-    let deposit_lovelace = get_certificate_deposit(tx);
+    let registration_deposit = get_registration_deposit(tx);
+    let deregistration_refund = get_deregistration_refund(tx);
     let withdrawal_lovelace = get_withdrawal_lovelace(tx);
     let output_lovelace = get_output_lovelace(tx);
-    let change_lovelace = input_lovelace
-        .saturating_add(withdrawal_lovelace)
-        .saturating_sub(output_lovelace)
-        .saturating_sub(fee);
-    let change_lovelace = change_lovelace.saturating_sub(deposit_lovelace);
+    let change_lovelace = (input_lovelace + withdrawal_lovelace + deregistration_refund)
+        .saturating_sub(output_lovelace + fee + registration_deposit);
 
     let input_assets: AssetsDelta = get_input_assets(indexer, tx).await?.into();
     let output_assets: AssetsDelta = get_output_assets(tx).into();

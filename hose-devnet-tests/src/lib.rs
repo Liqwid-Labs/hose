@@ -106,7 +106,7 @@ mod test {
 
         let withdrawal_tx = TxBuilder::new(context.network_id)
             .change_address(Address::Shelley(change_address.clone()))
-            .withdraw_from_script(script_hash, script_kind, 0, redeemer, None)
+            .withdraw_from_script(script_hash, script_kind, 0, redeemer.clone(), None)
             .add_script(script_kind, script_bytes.clone())
             .build(
                 context.indexer.clone(),
@@ -115,7 +115,24 @@ mod test {
             )
             .await?;
 
-        context.sign_and_submit_tx(withdrawal_tx).await?;
+        let (_, withdrawal_tx_id) = context.sign_and_submit_tx(withdrawal_tx).await?;
+        info!(
+            "Withdrawal tx hash: {}",
+            withdrawal_tx_id.transaction.id
+        );
+
+        let deregistration_tx = TxBuilder::new(context.network_id)
+            .change_address(Address::Shelley(change_address.clone()))
+            .deregister_script_stake(script_hash, script_kind, redeemer, None, key_deposit)
+            .add_script(script_kind, script_bytes.clone())
+            .build(
+                context.indexer.clone(),
+                &context.ogmios,
+                &context.protocol_params,
+            )
+            .await?;
+
+        context.sign_and_submit_tx(deregistration_tx).await?;
 
         Ok(())
     }
