@@ -4,10 +4,10 @@ mod test {
     use hose::builder::TxBuilder;
     use hose::primitives::{Output, Script, ScriptKind};
     use hose_devnet::prelude::*;
+    use pallas::codec::minicbor;
     use pallas::ledger::addresses::{
         Address, Network, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart,
     };
-    use pallas::codec::minicbor;
     use pallas::ledger::primitives::NetworkId;
     use tracing::info;
 
@@ -270,9 +270,7 @@ mod test {
         Ok(())
     }
 
-    #[test_context(DevnetContext)]
-    #[serial]
-    #[tokio::test]
+    #[hose_devnet::test]
     async fn multi_witness_tx(context: &mut DevnetContext) -> anyhow::Result<()> {
         // 1. Create a second wallet
         // Just increment the last byte of the configured key to get a new one
@@ -296,7 +294,7 @@ mod test {
                     &context.protocol_params,
                 )
                 .await?;
-            sign_and_submit_tx(context, tx).await?;
+            context.sign_and_submit_tx(tx).await?;
         }
 
         // 3. Find inputs for both wallets
@@ -339,7 +337,7 @@ mod test {
         let tx = tx.sign(&wallet2)?; // Sign with Wallet 2
 
         // 6. Sign and submit with first wallet
-        sign_and_submit_tx(context, tx).await?;
+        context.sign_and_submit_tx(tx).await?;
 
         Ok(())
     }
