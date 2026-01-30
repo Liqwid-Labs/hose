@@ -6,14 +6,17 @@ use ogmios_client::method::evaluate::Evaluation;
 use pallas::codec::utils::Bytes;
 use pallas::crypto::hash::Hash as PallasHash;
 use pallas::ledger::primitives::conway::{
-    ExUnits as PallasExUnits, Multiasset, NativeScript, NetworkId, NonZeroInt, PlutusData,
-    PlutusScript, Redeemer, RedeemerTag, TransactionBody, TransactionInput, Tx, WitnessSet,
+    Certificate as PallasCertificate, ExUnits as PallasExUnits, Multiasset, NativeScript,
+    NetworkId, NonZeroInt, PlutusData, PlutusScript, Redeemer, RedeemerTag, ScriptHash,
+    StakeCredential as PallasStakeCredential, TransactionBody, TransactionInput, Tx, WitnessSet,
 };
 use pallas::ledger::primitives::{Fragment, KeepRaw, NonEmptySet};
 use pallas::ledger::traverse::ComputeHash;
 
 use crate::builder::tx::{BuiltTransaction, StagingTransaction, TxBuilderError};
-use crate::primitives::{ExUnits, Hash, Output, RedeemerPurpose, ScriptKind};
+use crate::primitives::{
+    Certificate, ExUnits, Hash, Output, RedeemerPurpose, RewardAccount, ScriptKind,
+};
 
 impl StagingTransaction {
     pub fn build_conway(
@@ -78,6 +81,17 @@ impl StagingTransaction {
             None
         };
 
+        let withdrawals = if self.withdrawals.is_empty() {
+            None
+        } else {
+            Some(
+                self.withdrawals
+                    .iter()
+                    .map(|(account, amount)| (account.clone().into(), *amount))
+                    .collect(),
+            )
+        };
+
         let collateral_return = self
             .collateral_output
             .as_ref()
@@ -140,6 +154,60 @@ impl StagingTransaction {
 
         mint_policies.sort_unstable_by_key(|x| *x);
 
+        let certificates = NonEmptySet::from_vec(
+            self.certificates
+                .iter()
+                .map(|cert| match cert {
+                    // TODO: handle key credentials as well
+                    Certificate::StakeRegistrationScript {
+                        script_hash,
+                        deposit,
+                    } => {
+                        let cert_hash = *script_hash;
+                        let script_hash: ScriptHash = cert_hash.into();
+                        let has_cert_redeemer = self.redeemers.as_ref().map_or(false, |rdmrs| {
+                            rdmrs.contains_key(&RedeemerPurpose::Cert(cert_hash))
+                        });
+                        if has_cert_redeemer {
+                            let deposit =
+                                deposit.ok_or(TxBuilderError::MissingStakeCredentialDeposit)?;
+                            Ok(PallasCertificate::Reg(
+                                PallasStakeCredential::ScriptHash(script_hash),
+                                deposit,
+                            ))
+                        } else {
+                            Ok(PallasCertificate::StakeRegistration(
+                                PallasStakeCredential::ScriptHash(script_hash),
+                            ))
+                        }
+                    }
+                    Certificate::StakeDeregistrationScript {
+                        script_hash,
+                        deposit,
+                    } => {
+                        let deposit =
+                            deposit.ok_or(TxBuilderError::MissingStakeCredentialDeposit)?;
+                        let script_hash: ScriptHash = (*script_hash).into();
+                        Ok(PallasCertificate::UnReg(
+                            PallasStakeCredential::ScriptHash(script_hash),
+                            deposit,
+                        ))
+                    }
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        );
+
+        let certificate_script_hashes = self
+            .certificates
+            .iter()
+            .map(|cert| cert.script_hash())
+            .collect::<Vec<_>>();
+
+        let withdrawal_accounts = self
+            .withdrawals
+            .keys()
+            .cloned()
+            .collect::<Vec<RewardAccount>>();
         let mut redeemers = vec![];
 
         if let Some(rdmrs) = self.redeemers {
@@ -210,7 +278,35 @@ impl StagingTransaction {
                             data,
                             ex_units,
                         })
-                    } // todo!("reward and cert redeemers not yet supported"), // TODO
+                    }
+                    RedeemerPurpose::Cert(script_hash) => {
+                        let index = certificate_script_hashes
+                            .iter()
+                            .position(|hash| hash == script_hash)
+                            .ok_or(TxBuilderError::RedeemerTargetMissing)?
+                            as u32;
+
+                        redeemers.push(Redeemer {
+                            tag: RedeemerTag::Cert,
+                            index,
+                            data,
+                            ex_units,
+                        })
+                    }
+                    RedeemerPurpose::Reward(reward_account) => {
+                        let index = withdrawal_accounts
+                            .iter()
+                            .position(|account| account == reward_account)
+                            .ok_or(TxBuilderError::RedeemerTargetMissing)?
+                            as u32;
+
+                        redeemers.push(Redeemer {
+                            tag: RedeemerTag::Reward,
+                            index,
+                            data,
+                            ex_units,
+                        })
+                    }
                 }
             }
         };
@@ -243,8 +339,8 @@ impl StagingTransaction {
                 ttl: self.invalid_from_slot,
                 validity_interval_start: self.valid_from_slot,
                 fee: self.fee.unwrap_or_default(),
-                certificates: None,        // TODO
-                withdrawals: None,         // TODO
+                certificates,
+                withdrawals,
                 auxiliary_data_hash: None, // TODO (accept user input)
                 mint,
                 script_data_hash,

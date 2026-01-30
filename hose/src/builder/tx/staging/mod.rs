@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use hydrant::primitives::AssetId;
 use pallas::codec::minicbor;
@@ -6,8 +6,8 @@ use pallas::ledger::primitives::conway::AuxiliaryData;
 
 use super::TxBuilderError;
 use crate::primitives::{
-    Address, AssetsDelta, Datum, DatumHash, ExUnits, Hash, Input, Output, PubKeyHash,
-    RedeemerPurpose, Redeemers, Script, ScriptHash, ScriptKind,
+    Address, AssetsDelta, Certificate, Datum, DatumHash, ExUnits, Hash, Input, Output, PubKeyHash,
+    RedeemerPurpose, Redeemers, RewardAccount, Script, ScriptHash, ScriptKind,
 };
 
 mod build;
@@ -33,8 +33,8 @@ pub struct StagingTransaction {
     pub change_address: Option<Address>,
     pub language_view: Option<pallas::ledger::primitives::conway::LanguageView>,
     pub auxiliary_data: Option<AuxiliaryData>,
-    // pub certificates: TODO
-    // pub withdrawals: TODO
+    pub certificates: Vec<Certificate>,
+    pub withdrawals: BTreeMap<RewardAccount, u64>,
     // pub updates: TODO
     // pub phase_2_valid: TODO
 }
@@ -259,6 +259,22 @@ impl StagingTransaction {
         self
     }
 
+    pub fn add_reward_redeemer(
+        mut self,
+        reward_account: RewardAccount,
+        plutus_data: Vec<u8>,
+        ex_units: Option<ExUnits>,
+    ) -> Self {
+        let mut rdmrs = self.redeemers.unwrap_or_default();
+        rdmrs.insert(
+            RedeemerPurpose::Reward(reward_account),
+            (plutus_data, ex_units),
+        );
+        self.redeemers = Some(rdmrs);
+
+        self
+    }
+
     pub fn remove_mint_redeemer(mut self, policy: Hash<28>) -> Self {
         let mut rdmrs = self.redeemers.unwrap_or_default();
         rdmrs.remove(&RedeemerPurpose::Mint(Hash(*policy)));
@@ -267,6 +283,60 @@ impl StagingTransaction {
         self
     }
 
+    pub fn add_cert_redeemer(
+        mut self,
+        script_hash: Hash<28>,
+        plutus_data: Vec<u8>,
+        ex_units: Option<ExUnits>,
+    ) -> Self {
+        let mut rdmrs = self.redeemers.unwrap_or_default();
+        rdmrs.insert(RedeemerPurpose::Cert(script_hash), (plutus_data, ex_units));
+        self.redeemers = Some(rdmrs);
+
+        self
+    }
+
+    pub fn add_certificate(mut self, certificate: Certificate) -> Self {
+        let script_hash = certificate.script_hash();
+        self.certificates.retain(|c| c.script_hash() != script_hash);
+        self.certificates.push(certificate);
+        self
+    }
+
+    pub fn apply_stake_credential_deposit(mut self, deposit: u64) -> Self {
+        for cert in &mut self.certificates {
+            match cert {
+                Certificate::StakeRegistrationScript {
+                    deposit: cert_deposit,
+                    ..
+                } => {
+                    *cert_deposit = Some(deposit);
+                }
+                Certificate::StakeDeregistrationScript {
+                    deposit: cert_deposit,
+                    ..
+                } => {
+                    *cert_deposit = Some(deposit);
+                }
+            }
+        }
+        self
+    }
+
+    pub fn remove_certificate_by_script_hash(mut self, script_hash: Hash<28>) -> Self {
+        self.certificates.retain(|c| c.script_hash() != script_hash);
+        self
+    }
+
+    pub fn withdrawal(mut self, reward_account: RewardAccount, amount: u64) -> Self {
+        self.withdrawals.insert(reward_account, amount);
+        self
+    }
+
+    pub fn remove_withdrawal(mut self, reward_account: &RewardAccount) -> Self {
+        self.withdrawals.remove(reward_account);
+        self
+    }
     pub fn signature_amount_override(mut self, amount: u8) -> Self {
         self.signature_amount_override = Some(amount);
         self
@@ -299,3 +369,6 @@ impl StagingTransaction {
         self
     }
 }
+
+#[cfg(test)]
+mod tests;

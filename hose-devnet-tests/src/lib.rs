@@ -1,15 +1,40 @@
 #[cfg(test)]
 mod test {
-    use anyhow::Context as _;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use anyhow::Context;
     use hose::builder::TxBuilder;
     use hose::primitives::{Output, Script, ScriptKind};
     use hose_devnet::prelude::*;
+    use pallas::codec::minicbor;
     use pallas::ledger::addresses::{
         Address, Network, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart,
     };
-    use pallas::codec::minicbor;
     use pallas::ledger::primitives::NetworkId;
     use tracing::info;
+    use uplc::Fragment;
+    use uplc::tx::apply_params_to_script;
+    use uplc::tx::to_plutus_data::ToPlutusData;
+
+    // FIXME: move to a utils module
+    fn nonced_always_succeeds_script_bytes() -> anyhow::Result<Vec<u8>> {
+        // This is just an always succeeds that takes an integer as a parameter and ignores it.
+        let base_script_bytes = hex::decode("5601010022332259800a518a4d136564008ae68dd68011")?;
+        // We apply the unix time as the nonce just so we have a different script for each run,
+        // which avoids problems with rewards accounts (that cannot be registered twice in a row).
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)?
+            // Theoretically unsafe, but  will fit into a u64 for the next few million years :)
+            .as_millis() as u64;
+
+        let params = vec![nonce].to_plutus_data();
+        let params_bytes = params
+            .encode_fragment()
+            .map_err(|err| anyhow::anyhow!("failed to encode params: {err:?}"))?;
+        let script_bytes = apply_params_to_script(&params_bytes, &base_script_bytes)
+            .map_err(|err| anyhow::anyhow!("failed to apply params to script: {err:?}"))?;
+        Ok(script_bytes)
+    }
 
     #[hose_devnet::test]
     async fn basic_tx(context: &mut DevnetContext) -> anyhow::Result<()> {
@@ -53,6 +78,83 @@ mod test {
             .await?;
 
         let (_signed, _res) = context.sign_and_submit_tx(tx).await?;
+
+        Ok(())
+    }
+
+    #[hose_devnet::test]
+    async fn register_and_withdraw_zero_script_reward(
+        context: &mut DevnetContext,
+    ) -> anyhow::Result<()> {
+        let change_address = context.wallet.address().clone();
+        let script_bytes = nonced_always_succeeds_script_bytes()?;
+
+        let redeemer = hex::decode("00").unwrap();
+
+        let script_kind = ScriptKind::PlutusV3;
+        let script_hash = script_kind.hash(&script_bytes);
+        let registration_tx = TxBuilder::new(context.network_id)
+            .change_address(Address::Shelley(change_address.clone()))
+            .register_script_stake(script_hash, script_kind, Some(redeemer.clone()), None)
+            .add_script(script_kind, script_bytes.clone())
+            .build(
+                context.indexer.clone(),
+                &context.ogmios,
+                &context.protocol_params,
+            )
+            .await?;
+
+        context.sign_and_submit_tx(registration_tx).await?;
+
+        let withdrawal_tx = TxBuilder::new(context.network_id)
+            .change_address(Address::Shelley(change_address.clone()))
+            .withdraw_from_script(script_hash, script_kind, 0, redeemer.clone(), None)
+            .add_script(script_kind, script_bytes.clone())
+            .build(
+                context.indexer.clone(),
+                &context.ogmios,
+                &context.protocol_params,
+            )
+            .await?;
+
+        let (_, withdrawal_tx_id) = context.sign_and_submit_tx(withdrawal_tx).await?;
+        info!("Withdrawal tx hash: {}", withdrawal_tx_id.transaction.id);
+
+        let deregistration_tx = TxBuilder::new(context.network_id)
+            .change_address(Address::Shelley(change_address.clone()))
+            .deregister_script_stake(script_hash, script_kind, redeemer, None)
+            .add_script(script_kind, script_bytes.clone())
+            .build(
+                context.indexer.clone(),
+                &context.ogmios,
+                &context.protocol_params,
+            )
+            .await?;
+
+        context.sign_and_submit_tx(deregistration_tx).await?;
+
+        Ok(())
+    }
+
+    #[hose_devnet::test]
+    async fn register_script_stake_without_redeemer(
+        context: &mut DevnetContext,
+    ) -> anyhow::Result<()> {
+        let change_address = context.wallet.address().clone();
+        let script_bytes = nonced_always_succeeds_script_bytes()?;
+        let script_kind = ScriptKind::PlutusV3;
+        let script_hash = script_kind.hash(&script_bytes);
+        let registration_tx = TxBuilder::new(context.network_id)
+            .change_address(Address::Shelley(change_address.clone()))
+            .register_script_stake(script_hash, script_kind, None, None)
+            .build(
+                context.indexer.clone(),
+                &context.ogmios,
+                &context.protocol_params,
+            )
+            .await?;
+
+        context.sign_and_submit_tx(registration_tx).await?;
 
         Ok(())
     }
