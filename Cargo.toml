@@ -10,6 +10,6 @@ thiserror = "2.0"
 anyhow = "1.0"
 
 hydrant = { git = "https://github.com/liqwid-labs/hydrant" }
-ogmios-client = { git = "https://github.com/liqwid-labs/ogmios-client-rs", branch = "gustavo/key-deposit-param" }
+ogmios-client = { git = "https://github.com/liqwid-labs/ogmios-client-rs" }
 polymer = { git = "https://github.com/liqwid-labs/polymer" }
 pallas = { git = "https://github.com/txpipe/pallas", features = ["unstable"] }
