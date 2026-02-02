@@ -25,4 +25,7 @@ pub enum TxBuilderError {
     /// Unsupported era
     #[error("Unsupported era")]
     UnsupportedEra,
+    /// Registration deposit missing
+    #[error("Missing stake credential deposit")]
+    MissingStakeCredentialDeposit,
 }

@@ -14,7 +14,9 @@ use pallas::ledger::primitives::conway::LanguageView;
 use tokio::sync::Mutex;
 
 use crate::builder::coin_selection::{get_input_assets, get_input_lovelace};
-use crate::primitives::{ExUnits, Hash, Input, Output, ScriptKind, TxHash};
+use crate::primitives::{
+    Certificate, ExUnits, Hash, Input, Output, RewardAccount, ScriptKind, TxHash,
+};
 use crate::wallet::Wallet;
 
 pub mod coin_selection;
@@ -76,6 +78,81 @@ impl TxBuilder {
         self
     }
 
+    /// Register a script's reward account and lock some lovelace as a deposit, so it can be
+    /// withdrawn from in later transactions.
+    ///
+    /// Note that as of Jan 2026, script's aren't evaluated when they're registered (and so a
+    /// redeemer is optional), but they will be in the future.
+    ///
+    /// The deposit amount can be retrieved from the protocol parameters.
+    pub fn register_script_stake(
+        mut self,
+        script_hash: Hash<28>,
+        script_kind: ScriptKind,
+        // NOTE: Right now, redeemers and script execution aren't required by the ledger, but the
+        // Conway CDDL mandates them and they'll become necessary after the next hard fork.
+        redeemer: Option<Vec<u8>>,
+        ex_units: Option<ExUnits>,
+    ) -> Self {
+        self.body = self
+            .body
+            .add_certificate(Certificate::StakeRegistrationScript {
+                script_hash,
+                deposit: None,
+            });
+        if let Some(redeemer) = redeemer {
+            // if a redeemer was provided, we attach the script and its ex_units as well
+            self.body = self.body.add_cert_redeemer(script_hash, redeemer, ex_units);
+            self.script_kinds.insert(script_kind);
+        }
+        self
+    }
+
+    /// Deregister a script's reward account and refund the deposit.
+    ///
+    /// Note that, unlike registration, deregistration always requires a redeemer.
+    pub fn deregister_script_stake(
+        mut self,
+        script_hash: Hash<28>,
+        script_kind: ScriptKind,
+        redeemer: Vec<u8>,
+        ex_units: Option<ExUnits>,
+    ) -> Self {
+        self.body = self
+            .body
+            .add_certificate(Certificate::StakeDeregistrationScript {
+                script_hash,
+                deposit: None,
+            });
+        self.body = self.body.add_cert_redeemer(script_hash, redeemer, ex_units);
+        self.script_kinds.insert(script_kind);
+        self
+    }
+
+    /// Withdraw rewards from a script's reward account. Note that the account must have been
+    /// registered beforehand with `register_script_stake`.
+    ///
+    /// FIXME: according to the ledger rules, it's only possible to withdraw the entire amount of
+    /// rewards accrued in the account. We should probably query for this balance and fill the
+    /// amount automatically.
+    pub fn withdraw_from_script(
+        mut self,
+        script_hash: Hash<28>,
+        script_kind: ScriptKind,
+        amount: u64,
+        redeemer: Vec<u8>,
+        ex_units: Option<ExUnits>,
+    ) -> Self {
+        let network_id = self.body.network_id.unwrap_or(0);
+        let reward_account =
+            RewardAccount::from_script_hash_with_network_id(network_id, script_hash);
+        self.body = self.body.withdrawal(reward_account.clone(), amount);
+        self.body = self
+            .body
+            .add_reward_redeemer(reward_account, redeemer, ex_units);
+        self.script_kinds.insert(script_kind);
+        self
+    }
     /// Add a read-only input to the transaction which won't be consumed, but can be inspected by
     /// scripts. Perfect for oracles, shared state, etc.
     pub fn add_reference_input(mut self, input: Input) -> Self {
@@ -171,6 +248,9 @@ impl TxBuilder {
                     .language_view(script_kind.clone(), language_view.1);
             }
         }
+        self.body = self
+            .body
+            .apply_stake_credential_deposit(pparams.stake_credential_deposit.lovelace);
 
         let change_address = self
             .change_address
