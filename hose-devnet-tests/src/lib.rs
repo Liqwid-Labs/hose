@@ -24,6 +24,24 @@ mod test {
     }
 
     // FIXME: move to a utils module
+    fn network_from_network_id(network_id: NetworkId) -> Network {
+        match network_id {
+            NetworkId::Mainnet => Network::Mainnet,
+            NetworkId::Testnet => Network::Testnet,
+        }
+    }
+
+    // FIXME: move to a utils module
+    fn validator_to_address(context: &DevnetContext, validator: &Script) -> Address {
+        Address::Shelley(ShelleyAddress::new(
+            network_from_network_id(context.network_id),
+            ShelleyPaymentPart::Script(validator.hash.into()),
+            ShelleyDelegationPart::Null,
+        ))
+    }
+
+
+    // FIXME: move to a utils module
     fn nonced_always_succeeds_script_bytes() -> anyhow::Result<Vec<u8>> {
         // This is just an always succeeds that takes an integer as a parameter and ignores it.
         let base_script_bytes = hex::decode("5601010022332259800a518a4d136564008ae68dd68011")?;
@@ -64,6 +82,62 @@ mod test {
             .await?;
 
         let (_signed, _res) = context.sign_and_submit_tx(tx).await?;
+
+        Ok(())
+    }
+
+    #[hose_devnet::test]
+    async fn reference_input(context: &DevnetContext) -> anyhow::Result<()> {
+        let validator_bytes = nonced_always_succeeds_script_bytes()?;
+        let validator = Script::new(ScriptKind::PlutusV3, validator_bytes);
+        let validator_address = validator_to_address(context, &validator);
+
+        info!("Deploying the ref script");
+        let deploy_tx = TxBuilder::new(context.network_id)
+            // for convenience, we'll use the same validator for the ref input _and_ for the input
+            // we'll want to spend later.
+            // the output below holds a script we'll reference later on.
+            .add_output(
+                Output::new(validator_address.clone(), MIN_ADA)
+                .set_script(validator.kind, validator.bytes)
+            )
+            // and the output below is the one that will be spent later.
+            .add_output(Output::new(validator_address.clone(), MIN_ADA))
+            .change_address(Address::Shelley(context.wallet.address().clone()))
+            .build(
+                context.indexer.clone(),
+                &context.ogmios,
+                &context.protocol_params,
+            )
+            .await?;
+
+        let (signed, res) = context.sign_and_submit_tx(deploy_tx).await?;
+        info!("deployment transaction id: {:#?}", res.transaction.id);
+
+        let (ref_output_pointer, spend_output_pointer) = (
+            hydrant::primitives::TxOutputPointer::new(signed.hash()?.0.into(), 0),
+            hydrant::primitives::TxOutputPointer::new(signed.hash()?.0.into(), 1),
+        );
+        hose_devnet::wait_until_utxo_exists(context, ref_output_pointer.clone()).await?;
+
+        info!("Spending from a validator using the ref script");
+        let ref_and_spend_tx = TxBuilder::new(context.network_id)
+            // Note that we don't attach the script, but instead read it from the ref input.
+            .add_reference_input(ref_output_pointer.into())
+            .add_script_input(
+                spend_output_pointer.into(),
+                empty_redeemer(),
+                None,
+                validator.kind
+            )
+            .change_address(Address::Shelley(context.wallet.address().clone()))
+            .build(
+                context.indexer.clone(),
+                &context.ogmios,
+                &context.protocol_params,
+            ).await?;
+
+        context.sign_and_submit_tx(ref_and_spend_tx).await?;
 
         Ok(())
     }
@@ -270,11 +344,7 @@ mod test {
         let script_bytes =
             hex::decode("5101010023259800a518a4d136564004ae69").expect("invalid script bytes");
         let script = Script::new(ScriptKind::PlutusV3, script_bytes.clone());
-
-        let network = match context.network_id {
-            NetworkId::Testnet => Network::Testnet,
-            NetworkId::Mainnet => Network::Mainnet,
-        };
+        let network = network_from_network_id(context.network_id);
 
         let script_address = Address::Shelley(ShelleyAddress::new(
             network,
