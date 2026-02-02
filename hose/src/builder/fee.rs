@@ -93,7 +93,9 @@ impl TxBuilder {
 
         // Base fee + fee from size
         let mut min_fee = BigRational::from_integer(pparams.min_fee_constant.lovelace.into());
-        let tx_size = (built_tx.bytes.len()) as u64;
+        let tx_size = built_tx.bytes.len() as u64;
+        // TODO: for some reason this is off by 1 byte, not that it matters since it's a difference
+        // of 0.000044 ADA...
         min_fee += BigRational::from_integer(tx_size.into())
             * BigRational::from_integer(pparams.min_fee_coefficient.into());
         // Fee from scripts
