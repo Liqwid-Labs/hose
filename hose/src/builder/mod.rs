@@ -454,7 +454,7 @@ impl TxBuilder {
         }
 
         // 4. serialize to CBOR
-        match self.body.clone().build_conway(Some(evaluation), 0) {
+        match self.body.clone().build_conway(Some(evaluation)) {
             Ok(tx) => Ok(BuiltTx::new(self.body, tx)),
             Err(e) => Err(anyhow::anyhow!("Failed to build transaction: {}", e)),
         }

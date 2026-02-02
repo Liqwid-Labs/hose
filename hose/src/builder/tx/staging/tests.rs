@@ -41,7 +41,7 @@ fn build_includes_registration_certificate_and_redeemer() {
         })
         .add_cert_redeemer(script_hash, vec![0u8], None);
 
-    let built = tx.build_conway(None, 0).expect("build conway");
+    let built = tx.build_conway(None).expect("build conway");
     let decoded = Tx::decode_fragment(&built.bytes).expect("decode tx");
 
     let certs = decoded
@@ -81,7 +81,7 @@ fn build_includes_deregistration_certificate_and_redeemer() {
         })
         .add_cert_redeemer(script_hash, vec![0u8], None);
 
-    let built = tx.build_conway(None, 0).expect("build conway");
+    let built = tx.build_conway(None).expect("build conway");
     let decoded = Tx::decode_fragment(&built.bytes).expect("decode tx");
 
     let certs = decoded
@@ -119,7 +119,7 @@ fn build_includes_withdrawal_and_reward_redeemer() {
         .withdrawal(reward_account.clone(), 0)
         .add_reward_redeemer(reward_account.clone(), vec![0u8], None);
 
-    let built = tx.build_conway(None, 0).expect("build conway");
+    let built = tx.build_conway(None).expect("build conway");
     let decoded = Tx::decode_fragment(&built.bytes).expect("decode tx");
 
     let withdrawals = decoded

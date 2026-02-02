@@ -65,18 +65,39 @@ pub async fn calculate_min_fee(
 
     let witness_count = signers.len().max(1);
 
-    let built_tx = tx
+    let mut built_tx = tx
         .clone()
-        .build_conway(evaluation.clone(), witness_count)
+        .build_conway(evaluation.clone())
         .context("Failed to build transaction for fee calculation")?;
+
+    for i in 0..witness_count {
+        let mut vkey = [0u8; 32];
+        vkey[0] = (i % 256) as u8;
+        vkey[1] = (i / 256) as u8;
+        let signature = [0u8; 64];
+        built_tx = built_tx
+            .add_signature(vkey.into(), signature)
+            .context("Failed to add dummy witness")?;
+    }
+
     let evaluation = ogmios
         .evaluate(&built_tx.bytes)
         .await
         .context("Failed to evaluate transaction")?;
-    let built_tx = tx
+    let mut built_tx = tx
         .clone()
-        .build_conway(Some(evaluation.clone()), witness_count)
+        .build_conway(Some(evaluation.clone()))
         .context("Failed to build transaction with evaluation")?;
+
+    for i in 0..witness_count {
+        let mut vkey = [0u8; 32];
+        vkey[0] = (i % 256) as u8;
+        vkey[1] = (i / 256) as u8;
+        let signature = [0u8; 64];
+        built_tx = built_tx
+            .add_signature(vkey.into(), signature)
+            .context("Failed to add dummy witness")?;
+    }
 
     // Base fee + fee from size
     let mut min_fee = BigRational::from_integer(pparams.min_fee_constant.lovelace.into());
