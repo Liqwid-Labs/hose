@@ -41,7 +41,7 @@ mod test {
     }
 
     // FIXME: move to a utils module
-    fn nonced_always_succeeds_script_bytes() -> anyhow::Result<Vec<u8>> {
+    fn nonced_always_succeeds_script() -> anyhow::Result<Script> {
         // This is just an always succeeds that takes an integer as a parameter and ignores it.
         let base_script_bytes = hex::decode("5601010022332259800a518a4d136564008ae68dd68011")?;
         // We apply the unix time as the nonce just so we have a different script for each run,
@@ -57,7 +57,7 @@ mod test {
             .map_err(|err| anyhow::anyhow!("failed to encode params: {err:?}"))?;
         let script_bytes = apply_params_to_script(&params_bytes, &base_script_bytes)
             .map_err(|err| anyhow::anyhow!("failed to apply params to script: {err:?}"))?;
-        Ok(script_bytes)
+        Ok(Script::new(ScriptKind::PlutusV3, script_bytes))
     }
 
     #[hose_devnet::test]
@@ -87,8 +87,7 @@ mod test {
 
     #[hose_devnet::test]
     async fn reference_input(context: &DevnetContext) -> anyhow::Result<()> {
-        let validator_bytes = nonced_always_succeeds_script_bytes()?;
-        let validator = Script::new(ScriptKind::PlutusV3, validator_bytes);
+        let validator = nonced_always_succeeds_script()?;
         let validator_address = validator_to_address(context, &validator);
 
         info!("Deploying the ref script");
@@ -135,21 +134,18 @@ mod test {
     async fn register_and_withdraw_zero_script_reward(
         context: &mut DevnetContext,
     ) -> anyhow::Result<()> {
-        let script_bytes = nonced_always_succeeds_script_bytes()?;
-
-        let script_kind = ScriptKind::PlutusV3;
-        let script_hash = script_kind.hash(&script_bytes);
+        let script = nonced_always_succeeds_script()?;
         let registration_tx = TxBuilder::new(context.network_id, context.wallet.address())
-            .register_script_stake(script_hash, script_kind, Some(empty_redeemer()))
-            .add_script(script_kind, script_bytes.clone())
+            .register_script_stake(script.hash, script.kind, Some(empty_redeemer()))
+            .add_script(script.kind, script.bytes.clone())
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
         context.sign_and_submit_tx(registration_tx).await?;
 
         let withdrawal_tx = TxBuilder::new(context.network_id, context.wallet.address())
-            .withdraw_from_script(script_hash, script_kind, 0, empty_redeemer())
-            .add_script(script_kind, script_bytes.clone())
+            .withdraw_from_script(script.hash, script.kind, 0, empty_redeemer())
+            .add_script(script.kind, script.bytes.clone())
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
@@ -157,8 +153,8 @@ mod test {
         info!("Withdrawal tx hash: {}", withdrawal_tx_id.transaction.id);
 
         let deregistration_tx = TxBuilder::new(context.network_id, context.wallet.address())
-            .deregister_script_stake(script_hash, script_kind, empty_redeemer())
-            .add_script(script_kind, script_bytes.clone())
+            .deregister_script_stake(script.hash, script.kind, empty_redeemer())
+            .add_script(script.kind, script.bytes.clone())
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
@@ -171,11 +167,9 @@ mod test {
     async fn register_script_stake_without_redeemer(
         context: &mut DevnetContext,
     ) -> anyhow::Result<()> {
-        let script_bytes = nonced_always_succeeds_script_bytes()?;
-        let script_kind = ScriptKind::PlutusV3;
-        let script_hash = script_kind.hash(&script_bytes);
+        let script = nonced_always_succeeds_script()?;
         let registration_tx = TxBuilder::new(context.network_id, context.wallet.address())
-            .register_script_stake(script_hash, script_kind, None)
+            .register_script_stake(script.hash, script.kind, None)
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
@@ -186,9 +180,8 @@ mod test {
 
     #[hose_devnet::test]
     async fn mint_and_burn_assets(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let script_bytes = nonced_always_succeeds_script_bytes()?;
-        let script_kind = ScriptKind::PlutusV3;
-        let policy = script_kind.hash(&script_bytes);
+        let policy_script = nonced_always_succeeds_script()?;
+        let policy = policy_script.hash;
         let asset_name = b"qAda".to_vec();
         let mint_amount: u64 = 10_000_000;
 
@@ -199,10 +192,10 @@ mod test {
                     name: asset_name.clone(),
                     quantity: mint_amount,
                 },
-                script_kind,
+                policy_script.kind,
                 empty_redeemer(),
             )?
-            .add_script(script_kind, script_bytes.clone())
+            .add_script(policy_script.kind, policy_script.bytes.clone())
             .add_output(Output::new(context.wallet.address(), MIN_ADA).add_asset(
                 policy,
                 asset_name.clone(),
@@ -237,10 +230,10 @@ mod test {
                     name: asset_name,
                     quantity: mint_amount,
                 },
-                script_kind,
+                policy_script.kind,
                 empty_redeemer(),
             )?
-            .add_script(script_kind, script_bytes.clone())
+            .add_script(policy_script.kind, policy_script.bytes.clone())
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
@@ -251,9 +244,8 @@ mod test {
 
     #[hose_devnet::test]
     async fn mint_two_assets_in_one_transaction(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let script_bytes = nonced_always_succeeds_script_bytes()?;
-        let script_kind = ScriptKind::PlutusV3;
-        let policy = script_kind.hash(&script_bytes);
+        let policy_script = nonced_always_succeeds_script()?;
+        let policy = policy_script.hash;
 
         let asset_a = b"qAda".to_vec();
         let asset_b = b"qDJED".to_vec();
@@ -271,7 +263,7 @@ mod test {
                     name: asset_a.clone(),
                     quantity: amount_a,
                 },
-                script_kind,
+                policy_script.kind,
                 empty_redeemer(),
             )?
             .mint_asset(
@@ -280,10 +272,10 @@ mod test {
                     name: asset_b.clone(),
                     quantity: amount_b,
                 },
-                script_kind,
+                policy_script.kind,
                 empty_redeemer(),
             )?
-            .add_script(script_kind, script_bytes.clone())
+            .add_script(policy_script.kind, policy_script.bytes.clone())
             .add_output(mint_output)
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
