@@ -1064,6 +1064,8 @@ dependencies = [
 name = "hose-devnet-macros"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
+ "hose-devnet",
  "proc-macro2",
  "quote",
  "syn",

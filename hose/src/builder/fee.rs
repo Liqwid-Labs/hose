@@ -8,7 +8,7 @@ use num::{BigRational, ToPrimitive as _};
 use ogmios_client::OgmiosHttpClient;
 use ogmios_client::method::evaluate::Evaluation;
 use ogmios_client::method::pparams::ProtocolParams;
-use pallas::ledger::addresses::Address;
+use pallas::ledger::addresses::{Address, ShelleyPaymentPart};
 use tokio::sync::Mutex;
 
 use crate::builder::tx::StagingTransaction;
@@ -41,25 +41,16 @@ pub async fn calculate_min_fee(
         let address = Address::from_bytes(&input.address)
             .map_err(|e| anyhow::anyhow!("Invalid address: {:?}", e))?;
 
-        // Manual extraction of Payment Key Hash from Shelley address
-        // Header (1 byte): Type (4 bits) | Network (4 bits)
-        // Types 0, 2, 4, 6 have Payment Key Hash at bytes 1..29
-        let bytes = address.to_vec();
-        if !bytes.is_empty() {
-            let header = bytes[0];
-            let type_id = (header & 0xF0) >> 4;
-            // Ensure it's a Shelley address (Type <= 7) and has a key hash (Even types)
-            if type_id <= 7 && type_id % 2 == 0 && bytes.len() >= 29 {
-                let mut hash = [0u8; 28];
-                hash.copy_from_slice(&bytes[1..29]);
-                signers.insert(hash);
+        if let Address::Shelley(shelley_addr) = address {
+            if let ShelleyPaymentPart::Key(hash) = shelley_addr.payment() {
+                signers.insert(*hash);
             }
         }
     }
 
     if let Some(disclosed) = &tx.disclosed_signers {
         for signer in disclosed {
-            signers.insert(signer.0);
+            signers.insert(signer.0.into());
         }
     }
 

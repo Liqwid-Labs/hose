@@ -12,6 +12,9 @@ use tokio::sync::Mutex;
 use crate::builder::{Output, StagingTransaction};
 use crate::primitives::{Assets, Certificate, DatumOption};
 
+// Buffer for CBOR list/map wrapping overhead when calculating change output size.
+pub const CBOR_OVERHEAD_BUFFER: u64 = 160;
+
 pub async fn get_input_lovelace(
     indexer: Arc<Mutex<UtxoIndexer>>,
     tx: &StagingTransaction,
@@ -112,7 +115,7 @@ pub async fn select_coins(
             .encode_fragment()
             .unwrap()
             .len() as u64
-            + 160);
+            + CBOR_OVERHEAD_BUFFER);
 
     let registration_deposit = get_registration_deposit(tx);
     let deregistration_refund = get_deregistration_refund(tx);
@@ -148,10 +151,19 @@ pub async fn select_coins(
         selected_utxos.push(utxo.clone());
     }
 
-    anyhow::ensure!(
-        required_lovelace == 0 && required_assets.only_positive().is_empty(),
-        "failed to select coins, wallet doesn't contain enough funds"
-    );
+    if required_lovelace > 0 {
+        anyhow::bail!(
+            "failed to select coins, wallet doesn't contain enough lovelace (needs {} more)",
+            required_lovelace
+        );
+    }
+
+    if !required_assets.only_positive().is_empty() {
+        anyhow::bail!(
+            "failed to select coins, wallet doesn't contain enough assets: {:?}",
+            required_assets.only_positive()
+        );
+    }
 
     Ok(selected_utxos)
 }
