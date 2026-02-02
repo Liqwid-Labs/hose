@@ -120,6 +120,7 @@ pub async fn select_coins(
     let mut required_lovelace =
         (get_output_lovelace(tx) + fee + min_change_lovelace + registration_deposit)
             .saturating_sub(input_lovelace + withdrawal_lovelace + deregistration_refund);
+
     let mut required_assets: AssetsDelta =
         get_output_assets(tx).saturating_sub(input_assets).into();
 
@@ -141,7 +142,7 @@ pub async fn select_coins(
 
     // Select for lovelace
     possible_utxos.sort_by_key(|utxo| Reverse(utxo.lovelace)); // Largest-first
-    while !possible_utxos.is_empty() && required_lovelace > 0 {
+    while !possible_utxos.is_empty() && (required_lovelace > 0 || (tx.inputs.is_empty() && selected_utxos.is_empty())) {
         let utxo = possible_utxos.remove(0);
         required_lovelace = required_lovelace.saturating_sub(utxo.lovelace);
         selected_utxos.push(utxo.clone());
