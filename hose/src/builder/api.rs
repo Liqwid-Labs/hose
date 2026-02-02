@@ -2,11 +2,13 @@
 
 use std::collections::HashSet;
 
+use hydrant::primitives::AssetName;
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
 
 use super::TxBuilder;
 use super::tx::StagingTransaction;
+use crate::builder::tx::TxBuilderError;
 use crate::primitives::{
     Certificate, DatumOption, ExUnits, Hash, Input, Output, RewardAccount, ScriptKind,
 };
@@ -43,6 +45,47 @@ impl TxBuilder {
         self.body = self.body.add_spend_redeemer(input, plutus_data, ex_units);
         self.script_kinds.insert(script_kind);
         self
+    }
+
+    pub fn mint_asset(
+        self,
+        policy: Hash<28>,
+        policy_script_kind: ScriptKind,
+        name: AssetName,
+        amount: u64,
+        redeemer: Vec<u8>,
+        ex_units: Option<ExUnits>,
+    ) -> Result<Self, TxBuilderError> {
+        let amount = i64::try_from(amount).map_err(|_| TxBuilderError::InvalidMintAmount)?;
+        self.mint_or_burn_asset(policy, policy_script_kind, name, amount, redeemer, ex_units)
+    }
+
+    pub fn burn_asset(
+        self,
+        policy: Hash<28>,
+        policy_script_kind: ScriptKind,
+        name: AssetName,
+        amount: u64,
+        redeemer: Vec<u8>,
+        ex_units: Option<ExUnits>,
+    ) -> Result<Self, TxBuilderError> {
+        let amount = -i64::try_from(amount).map_err(|_| TxBuilderError::InvalidMintAmount)?;
+        self.mint_or_burn_asset(policy, policy_script_kind, name, amount, redeemer, ex_units)
+    }
+
+    fn mint_or_burn_asset(
+        mut self,
+        policy: Hash<28>,
+        policy_script_kind: ScriptKind,
+        name: AssetName,
+        amount: i64,
+        redeemer: Vec<u8>,
+        ex_units: Option<ExUnits>,
+    ) -> Result<Self, TxBuilderError> {
+        self.body = self.body.mint_asset(policy, name, amount)?;
+        self.body = self.body.add_mint_redeemer(policy, redeemer, ex_units);
+        self.script_kinds.insert(policy_script_kind);
+        Ok(self)
     }
 
     /// Manually add a collateral input to the transaction for consumption by the chain, if our

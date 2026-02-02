@@ -30,7 +30,7 @@ pub struct TxBuilder {
     script_kinds: HashSet<ScriptKind>,
 }
 
-// TODO: redeemers, auxillary data, language view, mint asset, delegation, governance
+// TODO: redeemers, auxillary data, language view, delegation, governance
 impl TxBuilder {
     /// 1. Balance inputs/outputs with fee (estimated on first run, actual on future runs)
     /// 2. Evaluate transaction and get the actual fee

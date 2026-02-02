@@ -28,4 +28,7 @@ pub enum TxBuilderError {
     /// Registration deposit missing
     #[error("Missing stake credential deposit")]
     MissingStakeCredentialDeposit,
+    /// Mint/burn amount is out of range
+    #[error("Invalid mint amount")]
+    InvalidMintAmount,
 }

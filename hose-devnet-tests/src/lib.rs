@@ -4,7 +4,7 @@ mod test {
 
     use anyhow::Context;
     use hose::builder::TxBuilder;
-    use hose::primitives::{Output, Script, ScriptKind};
+    use hose::primitives::{AssetId, Output, Script, ScriptKind};
     use hose_devnet::prelude::*;
     use pallas::codec::minicbor;
     use pallas::ledger::addresses::{
@@ -15,6 +15,13 @@ mod test {
     use uplc::Fragment;
     use uplc::tx::apply_params_to_script;
     use uplc::tx::to_plutus_data::ToPlutusData;
+
+    const MIN_ADA: u64 = 2_000_000;
+
+    // FIXME: move to a utils module
+    fn empty_redeemer() -> Vec<u8> {
+        hex::decode("00").unwrap()
+    }
 
     // FIXME: move to a utils module
     fn nonced_always_succeeds_script_bytes() -> anyhow::Result<Vec<u8>> {
@@ -39,7 +46,7 @@ mod test {
     #[hose_devnet::test]
     async fn basic_tx(context: &mut DevnetContext) -> anyhow::Result<()> {
         let tx = TxBuilder::new(context.network_id, context.wallet.address())
-            .add_output(Output::new(context.wallet.address(), 10_000_000))
+            .add_output(Output::new(context.wallet.address(), MIN_ADA))
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
@@ -52,7 +59,7 @@ mod test {
     async fn utxo_with_datum(context: &mut DevnetContext) -> anyhow::Result<()> {
         let cbor = minicbor::to_vec(42)?;
         let tx = TxBuilder::new(context.network_id, context.wallet.address())
-            .add_output(Output::new(context.wallet.address(), 10_000_000).set_datum(cbor))
+            .add_output(Output::new(context.wallet.address(), MIN_ADA).set_datum(cbor))
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
@@ -67,12 +74,10 @@ mod test {
     ) -> anyhow::Result<()> {
         let script_bytes = nonced_always_succeeds_script_bytes()?;
 
-        let redeemer = hex::decode("00").unwrap();
-
         let script_kind = ScriptKind::PlutusV3;
         let script_hash = script_kind.hash(&script_bytes);
         let registration_tx = TxBuilder::new(context.network_id, context.wallet.address())
-            .register_script_stake(script_hash, script_kind, Some(redeemer.clone()), None)
+            .register_script_stake(script_hash, script_kind, Some(empty_redeemer()), None)
             .add_script(script_kind, script_bytes.clone())
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
@@ -80,7 +85,7 @@ mod test {
         context.sign_and_submit_tx(registration_tx).await?;
 
         let withdrawal_tx = TxBuilder::new(context.network_id, context.wallet.address())
-            .withdraw_from_script(script_hash, script_kind, 0, redeemer.clone(), None)
+            .withdraw_from_script(script_hash, script_kind, 0, empty_redeemer(), None)
             .add_script(script_kind, script_bytes.clone())
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
@@ -89,7 +94,7 @@ mod test {
         info!("Withdrawal tx hash: {}", withdrawal_tx_id.transaction.id);
 
         let deregistration_tx = TxBuilder::new(context.network_id, context.wallet.address())
-            .deregister_script_stake(script_hash, script_kind, redeemer, None)
+            .deregister_script_stake(script_hash, script_kind, empty_redeemer(), None)
             .add_script(script_kind, script_bytes.clone())
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
@@ -112,6 +117,111 @@ mod test {
             .await?;
 
         context.sign_and_submit_tx(registration_tx).await?;
+
+        Ok(())
+    }
+
+    #[hose_devnet::test]
+    async fn mint_and_burn_assets(context: &mut DevnetContext) -> anyhow::Result<()> {
+        let script_bytes = nonced_always_succeeds_script_bytes()?;
+        let script_kind = ScriptKind::PlutusV3;
+        let policy = script_kind.hash(&script_bytes);
+        let asset_name = b"qAda".to_vec();
+        let mint_amount: u64 = 10_000_000;
+
+        let mint_tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .mint_asset(
+                policy,
+                script_kind,
+                asset_name.clone(),
+                mint_amount,
+                empty_redeemer(),
+                None,
+            )?
+            .add_script(script_kind, script_bytes.clone())
+            .add_output(Output::new(context.wallet.address(), MIN_ADA).add_asset(
+                policy,
+                asset_name.clone(),
+                mint_amount,
+            )?)
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+
+        let (signed, _res) = context.sign_and_submit_tx(mint_tx).await?;
+        let asset_id = AssetId::new(policy, asset_name.clone());
+        let output_idx = signed
+            .body()
+            .outputs
+            .iter()
+            .position(|output| {
+                output
+                    .assets
+                    .as_ref()
+                    .map_or(false, |assets| assets.get(&asset_id) == Some(&mint_amount))
+            })
+            .context("minted output not found")?;
+        let output_pointer =
+            hydrant::primitives::TxOutputPointer::new(signed.hash()?.0.into(), output_idx as u64);
+        hose_devnet::wait_until_utxo_exists(context, output_pointer.clone()).await?;
+
+        let burn_tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .add_input(output_pointer.into())
+            .add_output(Output::new(context.wallet.address(), MIN_ADA))
+            .burn_asset(
+                policy,
+                script_kind,
+                asset_name.clone(),
+                mint_amount,
+                empty_redeemer(),
+                None,
+            )?
+            .add_script(script_kind, script_bytes.clone())
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+
+        context.sign_and_submit_tx(burn_tx).await?;
+
+        Ok(())
+    }
+
+    #[hose_devnet::test]
+    async fn mint_two_assets_in_one_transaction(context: &mut DevnetContext) -> anyhow::Result<()> {
+        let script_bytes = nonced_always_succeeds_script_bytes()?;
+        let script_kind = ScriptKind::PlutusV3;
+        let policy = script_kind.hash(&script_bytes);
+
+        let asset_a = b"qAda".to_vec();
+        let asset_b = b"qDJED".to_vec();
+        let amount_a: u64 = 1_000_000;
+        let amount_b: u64 = 10_000_000;
+
+        let mint_output = Output::new(context.wallet.address(), MIN_ADA)
+            .add_asset(policy, asset_a.clone(), amount_a)?
+            .add_asset(policy, asset_b.clone(), amount_b)?;
+
+        let mint_tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .mint_asset(
+                policy,
+                script_kind,
+                asset_a.clone(),
+                amount_a,
+                empty_redeemer(),
+                None,
+            )?
+            .mint_asset(
+                policy,
+                script_kind,
+                asset_b.clone(),
+                amount_b,
+                empty_redeemer(),
+                None,
+            )?
+            .add_script(script_kind, script_bytes.clone())
+            .add_output(mint_output)
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+
+        context.sign_and_submit_tx(mint_tx).await?;
 
         Ok(())
     }
@@ -202,7 +312,7 @@ mod test {
             let tx = TxBuilder::new(context.network_id, context.wallet.address())
                 .add_script_input(
                     output_pointer.into(),
-                    hex::decode("00").unwrap(),
+                    empty_redeemer(),
                     None,
                     ScriptKind::PlutusV3,
                 )
