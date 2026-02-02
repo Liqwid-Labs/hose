@@ -4,7 +4,7 @@ mod test {
 
     use anyhow::Context;
     use hose::builder::TxBuilder;
-    use hose::primitives::{AssetId, Output, Script, ScriptKind};
+    use hose::primitives::{Asset, AssetId, Output, Script, ScriptKind};
     use hose_devnet::prelude::*;
     use pallas::codec::minicbor;
     use pallas::ledger::addresses::{
@@ -194,10 +194,12 @@ mod test {
 
         let mint_tx = TxBuilder::new(context.network_id, context.wallet.address())
             .mint_asset(
-                policy,
+                Asset {
+                    policy,
+                    name: asset_name.clone(),
+                    quantity: mint_amount,
+                },
                 script_kind,
-                asset_name.clone(),
-                mint_amount,
                 empty_redeemer(),
             )?
             .add_script(script_kind, script_bytes.clone())
@@ -230,10 +232,12 @@ mod test {
             .add_input(output_pointer.into())
             .add_output(Output::new(context.wallet.address(), MIN_ADA))
             .burn_asset(
-                policy,
+                Asset {
+                    policy,
+                    name: asset_name,
+                    quantity: mint_amount,
+                },
                 script_kind,
-                asset_name.clone(),
-                mint_amount,
                 empty_redeemer(),
             )?
             .add_script(script_kind, script_bytes.clone())
@@ -262,17 +266,21 @@ mod test {
 
         let mint_tx = TxBuilder::new(context.network_id, context.wallet.address())
             .mint_asset(
-                policy,
+                Asset {
+                    policy,
+                    name: asset_a.clone(),
+                    quantity: amount_a,
+                },
                 script_kind,
-                asset_a.clone(),
-                amount_a,
                 empty_redeemer(),
             )?
             .mint_asset(
-                policy,
+                Asset {
+                    policy,
+                    name: asset_b.clone(),
+                    quantity: amount_b,
+                },
                 script_kind,
-                asset_b.clone(),
-                amount_b,
                 empty_redeemer(),
             )?
             .add_script(script_kind, script_bytes.clone())

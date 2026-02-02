@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use hydrant::primitives::AssetName;
+use hydrant::primitives::{Asset, AssetId};
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
 
@@ -46,38 +46,35 @@ impl TxBuilder {
 
     pub fn mint_asset(
         self,
-        policy: Hash<28>,
+        asset: Asset,
         policy_script_kind: ScriptKind,
-        name: AssetName,
-        amount: u64,
         redeemer: Vec<u8>,
     ) -> Result<Self, TxBuilderError> {
-        let amount = i64::try_from(amount).map_err(|_| TxBuilderError::InvalidMintAmount)?;
-        self.mint_or_burn_asset(policy, policy_script_kind, name, amount, redeemer)
+        let amount =
+            i64::try_from(asset.quantity).map_err(|_| TxBuilderError::InvalidMintAmount)?;
+        self.mint_or_burn_asset(asset.into(), policy_script_kind, amount, redeemer)
     }
 
     pub fn burn_asset(
         self,
-        policy: Hash<28>,
+        asset: Asset,
         policy_script_kind: ScriptKind,
-        name: AssetName,
-        amount: u64,
         redeemer: Vec<u8>,
     ) -> Result<Self, TxBuilderError> {
-        let amount = -i64::try_from(amount).map_err(|_| TxBuilderError::InvalidMintAmount)?;
-        self.mint_or_burn_asset(policy, policy_script_kind, name, amount, redeemer)
+        let amount =
+            -i64::try_from(asset.quantity).map_err(|_| TxBuilderError::InvalidMintAmount)?;
+        self.mint_or_burn_asset(asset.into(), policy_script_kind, amount, redeemer)
     }
 
     fn mint_or_burn_asset(
         mut self,
-        policy: Hash<28>,
+        asset: AssetId,
         policy_script_kind: ScriptKind,
-        name: AssetName,
         amount: i64,
         redeemer: Vec<u8>,
     ) -> Result<Self, TxBuilderError> {
-        self.body = self.body.mint_asset(policy, name, amount)?;
-        self.body = self.body.add_mint_redeemer(policy, redeemer, None);
+        self.body = self.body.mint_asset(asset.policy, asset.name, amount)?;
+        self.body = self.body.add_mint_redeemer(asset.policy, redeemer, None);
         self.script_kinds.insert(policy_script_kind);
         Ok(self)
     }
