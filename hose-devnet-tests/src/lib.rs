@@ -40,7 +40,6 @@ mod test {
         ))
     }
 
-
     // FIXME: move to a utils module
     fn nonced_always_succeeds_script_bytes() -> anyhow::Result<Vec<u8>> {
         // This is just an always succeeds that takes an integer as a parameter and ignores it.
@@ -93,22 +92,17 @@ mod test {
         let validator_address = validator_to_address(context, &validator);
 
         info!("Deploying the ref script");
-        let deploy_tx = TxBuilder::new(context.network_id)
+        let deploy_tx = TxBuilder::new(context.network_id, context.wallet.address())
             // for convenience, we'll use the same validator for the ref input _and_ for the input
             // we'll want to spend later.
             // the output below holds a script we'll reference later on.
             .add_output(
                 Output::new(validator_address.clone(), MIN_ADA)
-                .set_script(validator.kind, validator.bytes)
+                    .set_script(validator.kind, validator.bytes),
             )
             // and the output below is the one that will be spent later.
             .add_output(Output::new(validator_address.clone(), MIN_ADA))
-            .change_address(Address::Shelley(context.wallet.address().clone()))
-            .build(
-                context.indexer.clone(),
-                &context.ogmios,
-                &context.protocol_params,
-            )
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
         let (signed, res) = context.sign_and_submit_tx(deploy_tx).await?;
@@ -121,21 +115,16 @@ mod test {
         hose_devnet::wait_until_utxo_exists(context, ref_output_pointer.clone()).await?;
 
         info!("Spending from a validator using the ref script");
-        let ref_and_spend_tx = TxBuilder::new(context.network_id)
+        let ref_and_spend_tx = TxBuilder::new(context.network_id, context.wallet.address())
             // Note that we don't attach the script, but instead read it from the ref input.
             .add_reference_input(ref_output_pointer.into())
             .add_script_input(
                 spend_output_pointer.into(),
                 empty_redeemer(),
-                None,
-                validator.kind
+                validator.kind,
             )
-            .change_address(Address::Shelley(context.wallet.address().clone()))
-            .build(
-                context.indexer.clone(),
-                &context.ogmios,
-                &context.protocol_params,
-            ).await?;
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
 
         context.sign_and_submit_tx(ref_and_spend_tx).await?;
 
@@ -151,7 +140,7 @@ mod test {
         let script_kind = ScriptKind::PlutusV3;
         let script_hash = script_kind.hash(&script_bytes);
         let registration_tx = TxBuilder::new(context.network_id, context.wallet.address())
-            .register_script_stake(script_hash, script_kind, Some(empty_redeemer()), None)
+            .register_script_stake(script_hash, script_kind, Some(empty_redeemer()))
             .add_script(script_kind, script_bytes.clone())
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
@@ -159,7 +148,7 @@ mod test {
         context.sign_and_submit_tx(registration_tx).await?;
 
         let withdrawal_tx = TxBuilder::new(context.network_id, context.wallet.address())
-            .withdraw_from_script(script_hash, script_kind, 0, empty_redeemer(), None)
+            .withdraw_from_script(script_hash, script_kind, 0, empty_redeemer())
             .add_script(script_kind, script_bytes.clone())
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
@@ -168,7 +157,7 @@ mod test {
         info!("Withdrawal tx hash: {}", withdrawal_tx_id.transaction.id);
 
         let deregistration_tx = TxBuilder::new(context.network_id, context.wallet.address())
-            .deregister_script_stake(script_hash, script_kind, empty_redeemer(), None)
+            .deregister_script_stake(script_hash, script_kind, empty_redeemer())
             .add_script(script_kind, script_bytes.clone())
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
@@ -186,7 +175,7 @@ mod test {
         let script_kind = ScriptKind::PlutusV3;
         let script_hash = script_kind.hash(&script_bytes);
         let registration_tx = TxBuilder::new(context.network_id, context.wallet.address())
-            .register_script_stake(script_hash, script_kind, None, None)
+            .register_script_stake(script_hash, script_kind, None)
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
@@ -210,7 +199,6 @@ mod test {
                 asset_name.clone(),
                 mint_amount,
                 empty_redeemer(),
-                None,
             )?
             .add_script(script_kind, script_bytes.clone())
             .add_output(Output::new(context.wallet.address(), MIN_ADA).add_asset(
@@ -231,7 +219,7 @@ mod test {
                 output
                     .assets
                     .as_ref()
-                    .map_or(false, |assets| assets.get(&asset_id) == Some(&mint_amount))
+                    .is_some_and(|assets| assets.get(&asset_id) == Some(&mint_amount))
             })
             .context("minted output not found")?;
         let output_pointer =
@@ -247,7 +235,6 @@ mod test {
                 asset_name.clone(),
                 mint_amount,
                 empty_redeemer(),
-                None,
             )?
             .add_script(script_kind, script_bytes.clone())
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
@@ -280,7 +267,6 @@ mod test {
                 asset_a.clone(),
                 amount_a,
                 empty_redeemer(),
-                None,
             )?
             .mint_asset(
                 policy,
@@ -288,7 +274,6 @@ mod test {
                 asset_b.clone(),
                 amount_b,
                 empty_redeemer(),
-                None,
             )?
             .add_script(script_kind, script_bytes.clone())
             .add_output(mint_output)
@@ -383,7 +368,6 @@ mod test {
                 .add_script_input(
                     output_pointer.into(),
                     empty_redeemer(),
-                    None,
                     ScriptKind::PlutusV3,
                 )
                 .add_script(ScriptKind::PlutusV3, script.bytes.clone())
