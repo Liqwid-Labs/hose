@@ -1,5 +1,5 @@
 use pallas::crypto::key::ed25519::{self, TryFromSecretKeyExtendedError};
-use pallas::ledger::addresses::{Network, ShelleyAddress};
+use pallas::ledger::addresses::{Address, Network, ShelleyAddress};
 use thiserror::Error;
 
 use crate::builder::tx::BuiltTransaction;
@@ -30,8 +30,8 @@ impl Wallet {
         self.network
     }
 
-    pub fn address(&self) -> &ShelleyAddress {
-        &self.address
+    pub fn address(&self) -> Address {
+        Address::Shelley(self.address.clone())
     }
 
     pub fn public_key(&self) -> ed25519::PublicKey {

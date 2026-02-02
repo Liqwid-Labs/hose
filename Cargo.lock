@@ -1064,6 +1064,8 @@ dependencies = [
 name = "hose-devnet-macros"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
+ "hose-devnet",
  "proc-macro2",
  "quote",
  "syn",
@@ -1203,7 +1205,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.2",
  "tokio",
  "tower-service",
  "tracing",
@@ -1755,7 +1757,7 @@ dependencies = [
 [[package]]
 name = "ogmios-client"
 version = "0.1.0"
-source = "git+https://github.com/liqwid-labs/ogmios-client-rs#ecf5ed3a2b210b0f5bfff93300b6be06f3f08dc4"
+source = "git+https://github.com/liqwid-labs/ogmios-client-rs#2575d00a34bb9dfae631865f5f973283e80da805"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -2404,7 +2406,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.2",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -2442,7 +2444,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.2",
  "tracing",
  "windows-sys 0.60.2",
 ]

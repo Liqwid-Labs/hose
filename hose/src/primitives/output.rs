@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use ogmios_client::method::pparams::ProtocolParams;
 use pallas::codec::utils::{Bytes, CborWrap};
 use pallas::crypto::hash::Hash as PallasHash;
 use pallas::ledger::primitives::conway::{
@@ -63,7 +64,7 @@ impl Output {
     pub fn remove_assets(mut self, assets_to_remove: Assets) -> Self {
         let mut assets = self.assets.unwrap_or_default();
         for key in assets_to_remove.keys() {
-            assets.remove(&key);
+            assets.remove(key);
         }
         self.assets = Some(assets);
         self
@@ -92,6 +93,24 @@ impl Output {
     pub fn clear_script(mut self) -> Self {
         self.script = None;
         self
+    }
+
+    pub fn size(&self) -> Result<usize, TxBuilderError> {
+        // TODO: remove unwrap
+        Ok(self
+            .build_babbage()?
+            .encode_fragment()
+            .expect("failed to encode output fragment")
+            .len())
+    }
+
+    /// Minimum amount of lovelace required for the UTxO to be considered valid
+    pub fn min_deposit(&self, pparams: &ProtocolParams) -> Result<u64, TxBuilderError> {
+        // the constant overhead of 160 bytes accounts for the transaction input and
+        // the entry in the UTxO map data structure (20 words * 8 bytes)
+        // https://cips.cardano.org/cip/CIP-55#the-new-minimum-lovelace-calculation
+        Ok(pparams.min_utxo_deposit_constant.lovelace
+            + pparams.min_utxo_deposit_coefficient * (self.size()? as u64 + 160))
     }
 
     pub fn build_babbage(&self) -> Result<TransactionOutput<'_>, TxBuilderError> {

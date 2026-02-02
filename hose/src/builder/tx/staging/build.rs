@@ -322,6 +322,9 @@ impl StagingTransaction {
             None
         };
 
+        // Construct dummy witnesses if requested
+        let witness_set_vkeys = None;
+
         let script_data_hash = self.language_view.map(|language_view| {
             let dta = pallas::ledger::primitives::conway::ScriptData {
                 redeemers: Some(witness_set_redeemers.clone()),
@@ -357,7 +360,7 @@ impl StagingTransaction {
             }
             .into(),
             transaction_witness_set: WitnessSet {
-                vkeywitness: None,
+                vkeywitness: witness_set_vkeys,
                 native_script: NonEmptySet::from_vec(
                     native_script.into_iter().map(|x| x.into()).collect(),
                 ),

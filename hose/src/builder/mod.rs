@@ -3,232 +3,35 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use anyhow::Context;
+use anyhow::{Context, Result, ensure};
 use hydrant::UtxoIndexer;
-use hydrant::primitives::TxOutputPointer;
 use ogmios_client::OgmiosHttpClient;
 use ogmios_client::method::pparams::ProtocolParams;
 use pallas::ledger::addresses::Address;
-use pallas::ledger::primitives::NetworkId;
 use pallas::ledger::primitives::conway::LanguageView;
 use tokio::sync::Mutex;
 
-use crate::builder::coin_selection::{get_input_assets, get_input_lovelace};
-use crate::primitives::{
-    Certificate, ExUnits, Hash, Input, Output, RewardAccount, ScriptKind, TxHash,
-};
+use crate::primitives::{DatumOption, Output, ScriptKind, TxHash};
 use crate::wallet::Wallet;
 
+mod api;
 pub mod coin_selection;
+mod collateral;
 pub mod fee;
 pub mod tx;
 
-use coin_selection::{handle_change, select_coins};
-use fee::calculate_min_fee;
 use tx::{BuiltTransaction, StagingTransaction};
 
 pub struct TxBuilder {
     body: StagingTransaction,
     collateral_address: Option<Address>,
-    change_address: Option<Address>,
+    change_address: Address,
+    change_datum: Option<DatumOption>,
     script_kinds: HashSet<ScriptKind>,
 }
 
 // TODO: redeemers, auxillary data, language view, mint asset, delegation, governance
 impl TxBuilder {
-    pub fn new(network: NetworkId) -> Self {
-        Self {
-            body: StagingTransaction::new().network_id(network.into()),
-            collateral_address: None,
-            change_address: None,
-            script_kinds: HashSet::new(),
-        }
-    }
-
-    /// Manually add an input to the transaction for consumption.
-    ///
-    /// Note that when no inputs are specified, the balancing algorithm will automatically select
-    /// inputs from change address.
-    pub fn add_input(mut self, input: Input) -> Self {
-        self.body = self.body.input(input);
-        self
-    }
-
-    // TODO: Use a `Script` type
-    pub fn add_script_input(
-        mut self,
-        input: Input,
-        plutus_data: Vec<u8>,
-        ex_units: Option<ExUnits>,
-        script_kind: ScriptKind,
-    ) -> Self {
-        self.body = self.body.input(input.clone());
-        self.body = self.body.add_spend_redeemer(input, plutus_data, ex_units);
-        self.script_kinds.insert(script_kind);
-        self
-    }
-
-    /// Manually add a collateral input to the transaction for consumption by the chain, if our
-    /// scripts fail to execute after submission. The input must contain only ADA (no assets).
-    ///
-    /// Note that when no collateral inputs are specified, the balancing algorithm will automatically
-    /// select inputs from change address.
-    pub fn add_collateral_input(mut self, input: Input) -> Self {
-        self.body = self.body.collateral_input(input);
-        self
-    }
-
-    /// Register a script's reward account and lock some lovelace as a deposit, so it can be
-    /// withdrawn from in later transactions.
-    ///
-    /// Note that as of Jan 2026, script's aren't evaluated when they're registered (and so a
-    /// redeemer is optional), but they will be in the future.
-    ///
-    /// The deposit amount can be retrieved from the protocol parameters.
-    pub fn register_script_stake(
-        mut self,
-        script_hash: Hash<28>,
-        script_kind: ScriptKind,
-        // NOTE: Right now, redeemers and script execution aren't required by the ledger, but the
-        // Conway CDDL mandates them and they'll become necessary after the next hard fork.
-        redeemer: Option<Vec<u8>>,
-        ex_units: Option<ExUnits>,
-    ) -> Self {
-        self.body = self
-            .body
-            .add_certificate(Certificate::StakeRegistrationScript {
-                script_hash,
-                deposit: None,
-            });
-        if let Some(redeemer) = redeemer {
-            // if a redeemer was provided, we attach the script and its ex_units as well
-            self.body = self.body.add_cert_redeemer(script_hash, redeemer, ex_units);
-            self.script_kinds.insert(script_kind);
-        }
-        self
-    }
-
-    /// Deregister a script's reward account and refund the deposit.
-    ///
-    /// Note that, unlike registration, deregistration always requires a redeemer.
-    pub fn deregister_script_stake(
-        mut self,
-        script_hash: Hash<28>,
-        script_kind: ScriptKind,
-        redeemer: Vec<u8>,
-        ex_units: Option<ExUnits>,
-    ) -> Self {
-        self.body = self
-            .body
-            .add_certificate(Certificate::StakeDeregistrationScript {
-                script_hash,
-                deposit: None,
-            });
-        self.body = self.body.add_cert_redeemer(script_hash, redeemer, ex_units);
-        self.script_kinds.insert(script_kind);
-        self
-    }
-
-    /// Withdraw rewards from a script's reward account. Note that the account must have been
-    /// registered beforehand with `register_script_stake`.
-    ///
-    /// FIXME: according to the ledger rules, it's only possible to withdraw the entire amount of
-    /// rewards accrued in the account. We should probably query for this balance and fill the
-    /// amount automatically.
-    pub fn withdraw_from_script(
-        mut self,
-        script_hash: Hash<28>,
-        script_kind: ScriptKind,
-        amount: u64,
-        redeemer: Vec<u8>,
-        ex_units: Option<ExUnits>,
-    ) -> Self {
-        let network_id = self.body.network_id.unwrap_or(0);
-        let reward_account =
-            RewardAccount::from_script_hash_with_network_id(network_id, script_hash);
-        self.body = self.body.withdrawal(reward_account.clone(), amount);
-        self.body = self
-            .body
-            .add_reward_redeemer(reward_account, redeemer, ex_units);
-        self.script_kinds.insert(script_kind);
-        self
-    }
-    /// Add a read-only input to the transaction which won't be consumed, but can be inspected by
-    /// scripts. Perfect for oracles, shared state, etc.
-    pub fn add_reference_input(mut self, input: Input) -> Self {
-        self.body = self.body.reference_input(input);
-        self
-    }
-
-    /// Add an output to the transaction, optionally including assets, datum and/or script.
-    pub fn add_output(mut self, output: Output) -> Self {
-        self.body = self.body.output(output);
-        self
-    }
-
-    /// Sets the address to which the collateral change will be sent when script validation fails.
-    ///
-    /// Note that by default, no collateral output is added to save on transaction size.
-    pub fn collateral_output_address(mut self, address: Address) -> Self {
-        self.collateral_address = Some(address);
-        self
-    }
-
-    pub fn valid_from(self, _timestamp: u64) -> Self {
-        todo!();
-    }
-    pub fn valid_to(self, _timestamp: u64) -> Self {
-        todo!();
-    }
-
-    // Witnesses
-    pub fn add_script(mut self, language: ScriptKind, bytes: Vec<u8>) -> Self {
-        self.body = self.body.script(language, bytes);
-        self
-    }
-    pub fn add_datum(mut self, datum: Vec<u8>) -> Self {
-        self.body = self.body.datum(datum);
-        self
-    }
-    pub fn add_signer(mut self, pub_key_hash: Hash<28>) -> Self {
-        self.body = self.body.disclosed_signer(pub_key_hash);
-        self
-    }
-
-    pub fn change_address(mut self, address: Address) -> Self {
-        self.change_address = Some(address);
-        self
-    }
-
-    fn non_collateral_inputs(&self) -> Vec<TxOutputPointer> {
-        self.body
-            .inputs
-            .iter()
-            .chain(self.body.reference_inputs.iter())
-            .map(Into::into)
-            .collect::<Vec<_>>()
-    }
-
-    async fn requires_collateral(&self, indexer: Arc<Mutex<UtxoIndexer>>) -> anyhow::Result<bool> {
-        // any mints (minting policy) or scripts (inline)
-        if !self.body.mint.is_empty() || !self.body.scripts.is_empty() {
-            return Ok(true);
-        }
-
-        // any input comes from a script or contains a script (validator)
-        let input_utxos = {
-            let indexer = indexer.lock().await;
-            indexer.utxos(&self.non_collateral_inputs())?
-        };
-        if input_utxos.iter().any(|input| {
-            Address::from_bytes(&input.address).unwrap().has_script() || input.script.is_some()
-        }) {
-            return Ok(true);
-        }
-
-        Ok(false)
-    }
-
     /// 1. Balance inputs/outputs with fee (estimated on first run, actual on future runs)
     /// 2. Evaluate transaction and get the actual fee
     /// 3. Apply fee to the transaction
@@ -236,114 +39,91 @@ impl TxBuilder {
     /// 5. BUILD
     pub async fn build(
         mut self,
-        indexer: Arc<Mutex<UtxoIndexer>>,
+        indexer: &Arc<Mutex<UtxoIndexer>>,
         ogmios: &OgmiosHttpClient,
         pparams: &ProtocolParams,
-    ) -> anyhow::Result<BuiltTx> {
+    ) -> Result<BuiltTx> {
+        // TODO: language view can only be set once per transaction, so this doens't make sense
         for script_kind in self.script_kinds.iter() {
-            if let Some(language_view) = language_view_for_script_kind(script_kind.clone(), pparams)
-            {
-                self.body = self
-                    .body
-                    .language_view(script_kind.clone(), language_view.1);
+            if let Some(language_view) = language_view_for_script_kind(*script_kind, pparams) {
+                self.body = self.body.language_view(*script_kind, language_view.1);
             }
         }
         self.body = self
             .body
             .apply_stake_credential_deposit(pparams.stake_credential_deposit.lovelace);
 
-        let change_address = self
-            .change_address
-            .clone()
-            .context("change address not set")?;
-
         let address_utxos = {
             let indexer = indexer.lock().await;
-            indexer.address_utxos(&change_address.to_vec())?
+            indexer.address_utxos(&self.change_address.to_vec())?
         };
 
-        // 1. balance inputs/outputs with fee
+        // balance inputs/outputs with fee in a loop until stable
         let (mut fee, mut evaluation) =
-            calculate_min_fee(indexer.clone(), ogmios, &self.body, pparams, None).await;
+            TxBuilder::min_fee(&self.body, indexer, ogmios, pparams, None).await?;
+        self.body = self.body.fee(fee);
+
+        let mut loop_count = 0;
+        const MAX_ITERATIONS: usize = 20;
         loop {
-            let input_lovelace = get_input_lovelace(indexer.clone(), &self.body).await?;
-            let input_assets = get_input_assets(indexer.clone(), &self.body).await?;
-            let additional_inputs = select_coins(
-                input_lovelace,
-                input_assets,
-                pparams,
-                &address_utxos,
-                &self.body,
-                fee,
-            )
-            .await;
-            if additional_inputs.is_empty() {
-                // No need to add more inputs, but we still need to recalculate the fee
-                (fee, evaluation) = calculate_min_fee(
-                    indexer.clone(),
-                    ogmios,
-                    &self.body,
-                    pparams,
-                    Some(evaluation),
-                )
-                .await;
-                self.body.fee = Some(fee);
-                break;
-            }
-            for input in additional_inputs {
+            loop_count += 1;
+            ensure!(
+                loop_count <= MAX_ITERATIONS,
+                "failed to balance transaction fee after {} iterations",
+                MAX_ITERATIONS
+            );
+
+            for input in self
+                .select_coins(indexer, &address_utxos, fee, pparams)
+                .await?
+            {
                 self.body = self.body.input(input.into());
             }
 
-            (fee, evaluation) = calculate_min_fee(
-                indexer.clone(),
+            // Recalculate fee with the change output and collateral input included
+            let finalized_body = {
+                let mut body = self.body.clone();
+                if let Some(collateral_input) = self
+                    .collateral_input(indexer, &address_utxos, pparams, fee)
+                    .await?
+                {
+                    body = body.collateral_input(collateral_input);
+                }
+                // TODO: if change output not present, must burn it in fee. perhaps disallow this?
+                let change_output = self
+                    .change_output(indexer, fee, pparams)
+                    .await?
+                    .context("failed to create change output")?;
+                body = body.output(change_output);
+                body
+            };
+            let (next_fee, next_evaluation) = TxBuilder::min_fee(
+                &finalized_body,
+                indexer,
                 ogmios,
-                &self.body,
                 pparams,
-                Some(evaluation),
+                Some(evaluation.clone()),
             )
-            .await;
-            self.body = self.body.fee(fee);
+            .await?;
+
+            // Same as the last iteration, fully balanced
+            if next_fee == fee {
+                self.body = finalized_body;
+                break;
+            }
+
+            self.body = self.body.fee(next_fee);
+            fee = next_fee;
+            evaluation = next_evaluation;
         }
 
-        // 2. add change output
-        // TODO: minimum output
-        if let Some(change_output) = handle_change(
-            indexer.clone(),
-            self.change_address.as_ref().unwrap(),
-            &self.body,
-            fee,
-        )
-        .await?
-        {
-            self.body = self.body.output(change_output);
-        }
-
-        // 3. pick collateral input
-        if self.requires_collateral(indexer.clone()).await?
-            && self.body.collateral_inputs.is_empty()
-        {
-            let required_lovelace = ((fee as f64) * pparams.collateral_percentage).ceil() as u64;
-
-            // TODO: support multiple collateral inputs
-            let mut collateral_utxos = address_utxos
-                .iter()
-                .filter(|utxo| utxo.lovelace > required_lovelace)
-                .collect::<Vec<_>>();
-            collateral_utxos.sort_unstable_by_key(|utxo| utxo.lovelace);
-            let collateral_utxo = *collateral_utxos
-                .first()
-                .context("no utxos large enough for collateral")?;
-            let collateral_utxo_pointer: TxOutputPointer = collateral_utxo.into();
-            self.body = self.body.collateral_input(collateral_utxo_pointer.into());
-
-            // TODO: collateral output
-        }
-
-        // 4. serialize to CBOR
-        match self.body.clone().build_conway(Some(evaluation)) {
-            Ok(tx) => Ok(BuiltTx::new(self.body, tx)),
-            Err(e) => Err(anyhow::anyhow!("Failed to build transaction: {}", e)),
-        }
+        // serialize to CBOR
+        let tx = self
+            .body
+            .clone()
+            .build_conway(Some(evaluation))
+            .context("failed to build transaction")?;
+        Ok(BuiltTx::new(self.body, tx))
     }
 }
 
@@ -400,7 +180,7 @@ impl BuiltTx {
         &self.staging
     }
 
-    pub fn sign(mut self, wallet: &Wallet) -> anyhow::Result<Self> {
+    pub fn sign(mut self, wallet: &Wallet) -> Result<Self> {
         let tx = wallet.sign(&self.tx)?;
         self.tx = tx;
         Ok(self)
@@ -414,7 +194,7 @@ impl BuiltTx {
         hex::encode(self.cbor())
     }
 
-    pub fn hash(&self) -> anyhow::Result<TxHash> {
+    pub fn hash(&self) -> Result<TxHash> {
         Ok(self.tx.hash.0.into())
     }
 }
