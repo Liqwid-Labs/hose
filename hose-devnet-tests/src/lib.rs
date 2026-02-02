@@ -38,18 +38,9 @@ mod test {
 
     #[hose_devnet::test]
     async fn basic_tx(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let change_address = context.wallet.address().clone();
-        let tx = TxBuilder::new(context.network_id)
-            .change_address(Address::Shelley(change_address))
-            .add_output(Output::new(
-                Address::Shelley(context.wallet.address().clone()),
-                10_000_000,
-            ))
-            .build(
-                context.indexer.clone(),
-                &context.ogmios,
-                &context.protocol_params,
-            )
+        let tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .add_output(Output::new(context.wallet.address(), 10_000_000))
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
         let (_signed, _res) = context.sign_and_submit_tx(tx).await?;
@@ -59,22 +50,10 @@ mod test {
 
     #[hose_devnet::test]
     async fn utxo_with_datum(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let change_address = context.wallet.address().clone();
         let cbor = minicbor::to_vec(42)?;
-        let tx = TxBuilder::new(context.network_id)
-            .change_address(Address::Shelley(change_address.clone()))
-            .add_output(
-                Output::new(
-                    Address::Shelley(context.wallet.address().clone()),
-                    10_000_000,
-                )
-                .set_datum(cbor),
-            )
-            .build(
-                context.indexer.clone(),
-                &context.ogmios,
-                &context.protocol_params,
-            )
+        let tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .add_output(Output::new(context.wallet.address(), 10_000_000).set_datum(cbor))
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
         let (_signed, _res) = context.sign_and_submit_tx(tx).await?;
@@ -86,49 +65,33 @@ mod test {
     async fn register_and_withdraw_zero_script_reward(
         context: &mut DevnetContext,
     ) -> anyhow::Result<()> {
-        let change_address = context.wallet.address().clone();
         let script_bytes = nonced_always_succeeds_script_bytes()?;
 
         let redeemer = hex::decode("00").unwrap();
 
         let script_kind = ScriptKind::PlutusV3;
         let script_hash = script_kind.hash(&script_bytes);
-        let registration_tx = TxBuilder::new(context.network_id)
-            .change_address(Address::Shelley(change_address.clone()))
+        let registration_tx = TxBuilder::new(context.network_id, context.wallet.address())
             .register_script_stake(script_hash, script_kind, Some(redeemer.clone()), None)
             .add_script(script_kind, script_bytes.clone())
-            .build(
-                context.indexer.clone(),
-                &context.ogmios,
-                &context.protocol_params,
-            )
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
         context.sign_and_submit_tx(registration_tx).await?;
 
-        let withdrawal_tx = TxBuilder::new(context.network_id)
-            .change_address(Address::Shelley(change_address.clone()))
+        let withdrawal_tx = TxBuilder::new(context.network_id, context.wallet.address())
             .withdraw_from_script(script_hash, script_kind, 0, redeemer.clone(), None)
             .add_script(script_kind, script_bytes.clone())
-            .build(
-                context.indexer.clone(),
-                &context.ogmios,
-                &context.protocol_params,
-            )
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
         let (_, withdrawal_tx_id) = context.sign_and_submit_tx(withdrawal_tx).await?;
         info!("Withdrawal tx hash: {}", withdrawal_tx_id.transaction.id);
 
-        let deregistration_tx = TxBuilder::new(context.network_id)
-            .change_address(Address::Shelley(change_address.clone()))
+        let deregistration_tx = TxBuilder::new(context.network_id, context.wallet.address())
             .deregister_script_stake(script_hash, script_kind, redeemer, None)
             .add_script(script_kind, script_bytes.clone())
-            .build(
-                context.indexer.clone(),
-                &context.ogmios,
-                &context.protocol_params,
-            )
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
         context.sign_and_submit_tx(deregistration_tx).await?;
@@ -140,18 +103,12 @@ mod test {
     async fn register_script_stake_without_redeemer(
         context: &mut DevnetContext,
     ) -> anyhow::Result<()> {
-        let change_address = context.wallet.address().clone();
         let script_bytes = nonced_always_succeeds_script_bytes()?;
         let script_kind = ScriptKind::PlutusV3;
         let script_hash = script_kind.hash(&script_bytes);
-        let registration_tx = TxBuilder::new(context.network_id)
-            .change_address(Address::Shelley(change_address.clone()))
+        let registration_tx = TxBuilder::new(context.network_id, context.wallet.address())
             .register_script_stake(script_hash, script_kind, None, None)
-            .build(
-                context.indexer.clone(),
-                &context.ogmios,
-                &context.protocol_params,
-            )
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
         context.sign_and_submit_tx(registration_tx).await?;
@@ -161,20 +118,10 @@ mod test {
 
     #[hose_devnet::test]
     async fn spend_specific_output(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let change_address = context.wallet.address().clone();
-
         let (_signed_tx, output_pointer) = {
-            let tx = TxBuilder::new(context.network_id)
-                .change_address(Address::Shelley(change_address.clone()))
-                .add_output(Output::new(
-                    Address::Shelley(context.wallet.address().clone()),
-                    42_000_000,
-                ))
-                .build(
-                    context.indexer.clone(),
-                    &context.ogmios,
-                    &context.protocol_params,
-                )
+            let tx = TxBuilder::new(context.network_id, context.wallet.address())
+                .add_output(Output::new(context.wallet.address(), 42_000_000))
+                .build(&context.indexer, &context.ogmios, &context.protocol_params)
                 .await?;
 
             let (signed, _res) = context.sign_and_submit_tx(tx).await?;
@@ -197,14 +144,9 @@ mod test {
         };
 
         let (_signed_tx, _res) = {
-            let tx = TxBuilder::new(context.network_id)
-                .change_address(Address::Shelley(change_address.clone()))
+            let tx = TxBuilder::new(context.network_id, context.wallet.address())
                 .add_input(output_pointer.into())
-                .build(
-                    context.indexer.clone(),
-                    &context.ogmios,
-                    &context.protocol_params,
-                )
+                .build(&context.indexer, &context.ogmios, &context.protocol_params)
                 .await?;
 
             context.sign_and_submit_tx(tx).await?
@@ -215,7 +157,6 @@ mod test {
 
     #[hose_devnet::test]
     async fn spend_from_always_succeeds_script(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let change_address = context.wallet.address().clone();
         let script_bytes =
             hex::decode("5101010023259800a518a4d136564004ae69").expect("invalid script bytes");
         let script = Script::new(ScriptKind::PlutusV3, script_bytes.clone());
@@ -233,14 +174,9 @@ mod test {
 
         // Create a transaction that sends some Ada to the script address.
         let (_signed_tx, output_pointer) = {
-            let tx = TxBuilder::new(context.network_id)
-                .change_address(Address::Shelley(change_address.clone()))
+            let tx = TxBuilder::new(context.network_id, context.wallet.address())
                 .add_output(Output::new(script_address.clone(), 42_000_000))
-                .build(
-                    context.indexer.clone(),
-                    &context.ogmios,
-                    &context.protocol_params,
-                )
+                .build(&context.indexer, &context.ogmios, &context.protocol_params)
                 .await?;
 
             let (signed, _res) = context.sign_and_submit_tx(tx).await?;
@@ -263,8 +199,7 @@ mod test {
 
         // Spend the output from the script address.
         {
-            let tx = TxBuilder::new(context.network_id)
-                .change_address(Address::Shelley(change_address.clone()))
+            let tx = TxBuilder::new(context.network_id, context.wallet.address())
                 .add_script_input(
                     output_pointer.into(),
                     hex::decode("00").unwrap(),
@@ -272,11 +207,7 @@ mod test {
                     ScriptKind::PlutusV3,
                 )
                 .add_script(ScriptKind::PlutusV3, script.bytes.clone())
-                .build(
-                    context.indexer.clone(),
-                    &context.ogmios,
-                    &context.protocol_params,
-                )
+                .build(&context.indexer, &context.ogmios, &context.protocol_params)
                 .await?;
 
             context.sign_and_submit_tx(tx).await?;
@@ -331,16 +262,10 @@ mod test {
                 next_amount
             );
 
-            let wallet_addr = Address::Shelley(context.wallet.address().clone());
-            let tx = TxBuilder::new(context.network_id)
-                .change_address(wallet_addr.clone())
+            let tx = TxBuilder::new(context.network_id, context.wallet.address())
                 .add_input(current_pointer.clone().into())
-                .add_output(Output::new(wallet_addr, next_amount))
-                .build(
-                    context.indexer.clone(),
-                    &context.ogmios,
-                    &context.protocol_params,
-                )
+                .add_output(Output::new(context.wallet.address(), next_amount))
+                .build(&context.indexer, &context.ogmios, &context.protocol_params)
                 .await?;
 
             let (signed, _) = context.sign_and_submit_tx(tx).await?;
@@ -382,19 +307,11 @@ mod test {
         let wallet2 = hose::wallet::WalletBuilder::new(context.config.network)
             .from_hex(hex::encode(key_bytes))?;
 
-        let wallet1_addr = Address::Shelley(context.wallet.address().clone());
-        let wallet2_addr = Address::Shelley(wallet2.address().clone());
-
         // 2. Fund Wallet 2 (send 10 ADA)
         {
-            let tx = TxBuilder::new(context.network_id)
-                .change_address(wallet1_addr.clone())
-                .add_output(Output::new(wallet2_addr.clone(), 10_000_000))
-                .build(
-                    context.indexer.clone(),
-                    &context.ogmios,
-                    &context.protocol_params,
-                )
+            let tx = TxBuilder::new(context.network_id, context.wallet.address())
+                .add_output(Output::new(wallet2.address(), 10_000_000))
+                .build(&context.indexer, &context.ogmios, &context.protocol_params)
                 .await?;
             context.sign_and_submit_tx(tx).await?;
         }
@@ -422,16 +339,11 @@ mod test {
 
         // 4. Construct Multi-witness Tx
         // Input from Wallet 1 + Input from Wallet 2 -> Output to Wallet 1
-        let tx = TxBuilder::new(context.network_id)
-            .change_address(wallet1_addr.clone())
+        let tx = TxBuilder::new(context.network_id, context.wallet.address())
             .add_input(input1.into())
             .add_input(input2.into())
-            .add_output(Output::new(wallet1_addr.clone(), 5_000_000)) // Just sending some back
-            .build(
-                context.indexer.clone(),
-                &context.ogmios,
-                &context.protocol_params,
-            )
+            .add_output(Output::new(context.wallet.address(), 5_000_000)) // Just sending some back
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
         // 5. Sign with second wallet

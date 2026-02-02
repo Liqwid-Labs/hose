@@ -1,206 +1,185 @@
 use std::cmp::Reverse;
 use std::sync::Arc;
 
-use anyhow::Context;
+use anyhow::{Context, Result, ensure};
 use hydrant::UtxoIndexer;
-use hydrant::primitives::{AssetsDelta, TxOutput};
+use hydrant::primitives::{Assets, AssetsDelta, TxOutput};
 use ogmios_client::method::pparams::ProtocolParams;
-use pallas::ledger::addresses::Address as PallasAddress;
-use pallas::ledger::primitives::Fragment;
 use tokio::sync::Mutex;
 
-use crate::builder::{Output, StagingTransaction};
-use crate::primitives::{Assets, Certificate, DatumOption};
+use super::{Output, TxBuilder};
+use crate::primitives::Certificate;
 
-// Buffer for CBOR list/map wrapping overhead when calculating change output size.
-pub const CBOR_OVERHEAD_BUFFER: u64 = 160;
+impl TxBuilder {
+    pub(crate) async fn select_coins(
+        &self,
+        indexer: &Arc<Mutex<UtxoIndexer>>,
+        possible_utxos: &[TxOutput],
+        fee: u64,
+        pparams: &ProtocolParams,
+    ) -> Result<Vec<TxOutput>> {
+        let mut selected_utxos = vec![];
 
-pub async fn get_input_lovelace(
-    indexer: Arc<Mutex<UtxoIndexer>>,
-    tx: &StagingTransaction,
-) -> anyhow::Result<u64> {
-    let indexer = indexer.lock().await;
-    Ok(indexer
-        .utxos(&tx.inputs)?
-        .iter()
-        .map(|utxo| utxo.lovelace)
-        .sum())
-}
+        let input_lovelace = self.get_input_lovelace(indexer).await?;
+        let input_assets = self.get_input_assets(indexer).await?;
 
-pub async fn get_input_assets(
-    indexer: Arc<Mutex<UtxoIndexer>>,
-    tx: &StagingTransaction,
-) -> anyhow::Result<Assets> {
-    let indexer = indexer.lock().await;
-    Ok(indexer
-        .utxos(&tx.inputs)?
-        .iter()
-        .map(|utxo| utxo.assets.clone())
-        .sum())
-}
+        // Filter utxos already used as inputs
+        // TODO: should also filter out utxos with scripts? utxos with datums?
+        let mut possible_utxos = possible_utxos
+            .iter()
+            .filter(|utxo| !self.body.inputs.iter().any(|input| input == *utxo))
+            .collect::<Vec<_>>();
 
-pub fn get_output_lovelace(tx: &StagingTransaction) -> u64 {
-    tx.outputs.iter().map(|output| output.lovelace).sum()
-}
+        // TODO: consider minted assets
+        // TODO: for simplicity, we assume that all assets are included in the change output
+        let mut change_output =
+            Output::new(self.change_address.clone(), 0).add_assets(input_assets.clone())?;
+        change_output.datum = self.change_datum.clone();
+        let min_change_lovelace = change_output.min_deposit(pparams)?;
 
-// registration certificates consume a deposit from the inputs, while deregistration
-// certificates refund them.
-pub fn get_registration_deposit(tx: &StagingTransaction) -> u64 {
-    tx.certificates
-        .iter()
-        .filter_map(|cert| match cert {
-            Certificate::StakeRegistrationScript { deposit, .. } => *deposit,
-            Certificate::StakeDeregistrationScript { .. } => None,
-        })
-        .sum()
-}
+        let registration_deposit = self.get_registration_deposit();
+        let deregistration_refund = self.get_deregistration_refund();
+        let withdrawal_lovelace = self.get_withdrawal_lovelace();
+        let mut required_lovelace =
+            (self.get_output_lovelace() + fee + min_change_lovelace + registration_deposit)
+                .saturating_sub(input_lovelace + withdrawal_lovelace + deregistration_refund);
 
-pub fn get_deregistration_refund(tx: &StagingTransaction) -> u64 {
-    tx.certificates
-        .iter()
-        .filter_map(|cert| match cert {
-            Certificate::StakeRegistrationScript { .. } => None,
-            Certificate::StakeDeregistrationScript { deposit, .. } => *deposit,
-        })
-        .sum()
-}
+        let mut required_assets: AssetsDelta =
+            self.get_output_assets().saturating_sub(input_assets).into();
 
-pub fn get_withdrawal_lovelace(tx: &StagingTransaction) -> u64 {
-    tx.withdrawals.values().copied().sum()
-}
-pub fn get_output_assets(tx: &StagingTransaction) -> Assets {
-    tx.outputs
-        .iter()
-        .flat_map(|output| output.assets.clone())
-        .sum()
-}
+        // Select for assets
+        while !possible_utxos.is_empty()
+            && let Some(asset) = required_assets.only_positive().keys().next()
+        {
+            // Largest-first by asset ammount
+            possible_utxos.sort_by_key(|utxo| Reverse(*utxo.assets.get(asset).unwrap_or(&0)));
 
-pub async fn select_coins(
-    input_lovelace: u64,
-    input_assets: Assets,
-    pparams: &ProtocolParams,
-    possible_utxos: &[TxOutput],
-    tx: &StagingTransaction,
-    fee: u64,
-    change_address: &PallasAddress,
-    change_datum: Option<DatumOption>,
-) -> anyhow::Result<Vec<TxOutput>> {
-    let mut selected_utxos = vec![];
+            let utxo = possible_utxos.remove(0);
+            if utxo.assets.get(asset).unwrap_or(&0) == &0 {
+                break;
+            }
 
-    // Filter utxos already used as inputs
-    // TODO: should also filter out utxos with scripts? utxos with datums?
-    let mut possible_utxos = possible_utxos
-        .iter()
-        .filter(|utxo| !tx.inputs.iter().any(|input| input == *utxo))
-        .collect::<Vec<_>>();
-
-    // TODO: consider minted assets
-
-    let change_assets = input_assets
-        .clone()
-        .saturating_sub(get_output_assets(tx))
-        .into();
-    let mut dummy_change_output = Output::new(change_address.clone(), u64::MAX)
-        .add_assets(change_assets)
-        .context("failed to create dummy change output")?;
-
-    if let Some(datum) = change_datum {
-        dummy_change_output.datum = Some(datum);
-    }
-
-    let min_change_lovelace = pparams.min_utxo_deposit_coefficient
-        * (dummy_change_output
-            .build_babbage()
-            .context("failed to build dummy change output")?
-            .encode_fragment()
-            .unwrap()
-            .len() as u64
-            + CBOR_OVERHEAD_BUFFER);
-
-    let registration_deposit = get_registration_deposit(tx);
-    let deregistration_refund = get_deregistration_refund(tx);
-    let withdrawal_lovelace = get_withdrawal_lovelace(tx);
-    let mut required_lovelace =
-        (get_output_lovelace(tx) + fee + min_change_lovelace + registration_deposit)
-            .saturating_sub(input_lovelace + withdrawal_lovelace + deregistration_refund);
-
-    let mut required_assets: AssetsDelta =
-        get_output_assets(tx).saturating_sub(input_assets).into();
-
-    // Select for assets
-    while !possible_utxos.is_empty()
-        && let Some(asset) = required_assets.only_positive().keys().next()
-    {
-        // Largest-first but now by asset amount
-        possible_utxos.sort_by_key(|utxo| Reverse(*utxo.assets.get(asset).unwrap_or(&0)));
-
-        let utxo = possible_utxos.remove(0);
-        if utxo.assets.get(asset).unwrap_or(&0) == &0 {
-            break;
+            required_assets = required_assets - utxo.assets.clone().into();
+            selected_utxos.push(utxo.clone());
         }
 
-        required_assets = required_assets - utxo.assets.clone().into();
-        selected_utxos.push(utxo.clone());
-    }
+        // Select for lovelace
+        possible_utxos.sort_by_key(|utxo| Reverse(utxo.lovelace)); // Largest-first
+        while !possible_utxos.is_empty()
+            && (required_lovelace > 0 || (self.body.inputs.is_empty() && selected_utxos.is_empty()))
+        {
+            let utxo = possible_utxos.remove(0);
+            required_lovelace = required_lovelace.saturating_sub(utxo.lovelace);
+            selected_utxos.push(utxo.clone());
+        }
 
-    // Select for lovelace
-    possible_utxos.sort_by_key(|utxo| Reverse(utxo.lovelace)); // Largest-first
-    while !possible_utxos.is_empty() && (required_lovelace > 0 || (tx.inputs.is_empty() && selected_utxos.is_empty())) {
-        let utxo = possible_utxos.remove(0);
-        required_lovelace = required_lovelace.saturating_sub(utxo.lovelace);
-        selected_utxos.push(utxo.clone());
-    }
-
-    if required_lovelace > 0 {
-        anyhow::bail!(
+        ensure!(
+            required_lovelace == 0,
             "failed to select coins, wallet doesn't contain enough lovelace (needs {} more)",
             required_lovelace
         );
-    }
-
-    if !required_assets.only_positive().is_empty() {
-        anyhow::bail!(
+        ensure!(
+            required_assets.only_positive().is_empty(),
             "failed to select coins, wallet doesn't contain enough assets: {:?}",
             required_assets.only_positive()
         );
+
+        Ok(selected_utxos)
     }
 
-    Ok(selected_utxos)
-}
+    /// Create change output if needed because transaction is not balanced.
+    pub(crate) async fn change_output(
+        &self,
+        indexer: &Arc<Mutex<UtxoIndexer>>,
+        fee: u64,
+        pparams: &ProtocolParams,
+    ) -> Result<Option<Output>> {
+        // TODO: consider minted assets
+        let input_lovelace = self.get_input_lovelace(indexer).await?;
+        let registration_deposit = self.get_registration_deposit();
+        let deregistration_refund = self.get_deregistration_refund();
+        let withdrawal_lovelace = self.get_withdrawal_lovelace();
+        let output_lovelace = self.get_output_lovelace();
+        let change_lovelace = (input_lovelace + withdrawal_lovelace + deregistration_refund)
+            .saturating_sub(output_lovelace + fee + registration_deposit);
 
-/// Create change output if needed because transaction is not balanced.
-pub async fn handle_change(
-    indexer: Arc<Mutex<UtxoIndexer>>,
-    change_address: &PallasAddress,
-    tx: &StagingTransaction,
-    fee: u64,
-    change_datum: Option<DatumOption>,
-) -> anyhow::Result<Option<Output>> {
-    // TODO: consider minted assets
-    let input_lovelace = get_input_lovelace(indexer.clone(), tx).await?;
-    let registration_deposit = get_registration_deposit(tx);
-    let deregistration_refund = get_deregistration_refund(tx);
-    let withdrawal_lovelace = get_withdrawal_lovelace(tx);
-    let output_lovelace = get_output_lovelace(tx);
-    let change_lovelace = (input_lovelace + withdrawal_lovelace + deregistration_refund)
-        .saturating_sub(output_lovelace + fee + registration_deposit);
+        let input_assets: AssetsDelta = self.get_input_assets(indexer).await?.into();
+        let output_assets: AssetsDelta = self.get_output_assets().into();
+        let change_assets = input_assets - output_assets;
 
-    let input_assets: AssetsDelta = get_input_assets(indexer, tx).await?.into();
-    let output_assets: AssetsDelta = get_output_assets(tx).into();
-    let change_assets = input_assets - output_assets;
+        if change_lovelace == 0 && change_assets.only_positive().is_empty() {
+            return Ok(None);
+        }
 
-    if change_lovelace == 0 && change_assets.only_positive().is_empty() {
-        return Ok(None);
-    }
-
-    let mut change_output =
-        Output::new(change_address.clone(), change_lovelace)
+        let mut change_output = Output::new(self.change_address.clone(), change_lovelace)
             .add_assets(change_assets.into())
-            .expect("failed to create change output");
+            .context("failed to create change output")?;
+        change_output.datum = self.change_datum.clone();
 
-    if let Some(datum) = change_datum {
-        change_output.datum = Some(datum);
+        if change_output.min_deposit(pparams)? > change_output.lovelace {
+            return Ok(None);
+        }
+        Ok(Some(change_output))
     }
 
-    Ok(Some(change_output))
+    pub(crate) async fn get_input_lovelace(
+        &self,
+        indexer: &Arc<Mutex<UtxoIndexer>>,
+    ) -> Result<u64> {
+        let indexer = indexer.lock().await;
+        Ok(indexer
+            .utxos(&self.body.inputs)?
+            .iter()
+            .map(|utxo| utxo.lovelace)
+            .sum())
+    }
+
+    async fn get_input_assets(&self, indexer: &Arc<Mutex<UtxoIndexer>>) -> Result<Assets> {
+        let indexer = indexer.lock().await;
+        Ok(indexer
+            .utxos(&self.body.inputs)?
+            .iter()
+            .map(|utxo| utxo.assets.clone())
+            .sum())
+    }
+
+    pub(crate) fn get_output_lovelace(&self) -> u64 {
+        self.body.outputs.iter().map(|output| output.lovelace).sum()
+    }
+
+    fn get_output_assets(&self) -> Assets {
+        self.body
+            .outputs
+            .iter()
+            .flat_map(|output| output.assets.clone())
+            .sum()
+    }
+
+    /// Registration certificates consume a deposit from the inputs, while deregistration
+    /// certificates refund them.
+    fn get_registration_deposit(&self) -> u64 {
+        self.body
+            .certificates
+            .iter()
+            .filter_map(|cert| match cert {
+                Certificate::StakeRegistrationScript { deposit, .. } => *deposit,
+                Certificate::StakeDeregistrationScript { .. } => None,
+            })
+            .sum()
+    }
+
+    fn get_deregistration_refund(&self) -> u64 {
+        self.body
+            .certificates
+            .iter()
+            .filter_map(|cert| match cert {
+                Certificate::StakeRegistrationScript { .. } => None,
+                Certificate::StakeDeregistrationScript { deposit, .. } => *deposit,
+            })
+            .sum()
+    }
+
+    fn get_withdrawal_lovelace(&self) -> u64 {
+        self.body.withdrawals.values().copied().sum()
+    }
 }
