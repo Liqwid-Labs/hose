@@ -5,6 +5,7 @@ mod test {
     use hose::primitives::{Asset, AssetId, Output, Script, ScriptKind};
     use hose_devnet::prelude::*;
     use hose_devnet::{empty_redeemer, nonced_always_succeeds_script, validator_to_address};
+    use hydrant::primitives::TxOutputPointer;
     use pallas::codec::minicbor;
     use tracing::info;
 
@@ -58,8 +59,8 @@ mod test {
         info!("deployment transaction id: {:#?}", res.transaction.id);
 
         let (ref_output_pointer, spend_output_pointer) = (
-            hydrant::primitives::TxOutputPointer::new(signed.hash()?.0.into(), 0),
-            hydrant::primitives::TxOutputPointer::new(signed.hash()?.0.into(), 1),
+            TxOutputPointer::new(signed.hash()?, 0),
+            TxOutputPointer::new(signed.hash()?, 1),
         );
         hose_devnet::wait_until_utxo_exists(context, ref_output_pointer.clone()).await?;
 
@@ -167,8 +168,7 @@ mod test {
                     .is_some_and(|assets| assets.get(&asset_id) == Some(&mint_amount))
             })
             .context("minted output not found")?;
-        let output_pointer =
-            hydrant::primitives::TxOutputPointer::new(signed.hash()?.0.into(), output_idx as u64);
+        let output_pointer = TxOutputPointer::new(signed.hash()?.0.into(), output_idx as u64);
         hose_devnet::wait_until_utxo_exists(context, output_pointer.clone()).await?;
 
         let burn_tx = TxBuilder::new(context.network_id, context.wallet.address())
@@ -252,11 +252,8 @@ mod test {
                 .position(|output| output.lovelace == 42_000_000)
                 .context("output with 42 ada not found")?;
 
-            let output_pointer: hydrant::primitives::TxOutputPointer =
-                hydrant::primitives::TxOutputPointer::new(
-                    signed.hash()?.0.into(),
-                    output_idx as u64,
-                );
+            let output_pointer: TxOutputPointer =
+                TxOutputPointer::new(signed.hash()?.0.into(), output_idx as u64);
 
             hose_devnet::wait_until_utxo_exists(context, output_pointer.clone()).await?;
             (signed, output_pointer)
@@ -297,11 +294,8 @@ mod test {
                 .position(|output| output.address == script_address)
                 .context("output with script address not found")?;
 
-            let output_pointer: hydrant::primitives::TxOutputPointer =
-                hydrant::primitives::TxOutputPointer::new(
-                    signed.hash()?.0.into(),
-                    output_idx as u64,
-                );
+            let output_pointer: TxOutputPointer =
+                TxOutputPointer::new(signed.hash()?.0.into(), output_idx as u64);
 
             (signed, output_pointer)
         };
@@ -349,7 +343,7 @@ mod test {
                 start_amount
             );
 
-            let pointer: hydrant::primitives::TxOutputPointer = output.clone().into();
+            let pointer: TxOutputPointer = output.clone().into();
             info!(
                 "Starting chain with UTXO: {}#{} ({} lovelace)",
                 pointer.hash, pointer.index, output.lovelace
@@ -388,10 +382,7 @@ mod test {
                 .position(|output| output.lovelace == next_amount)
                 .context("chained output not found in transaction")?;
 
-            current_pointer = hydrant::primitives::TxOutputPointer::new(
-                signed.hash()?.0.into(),
-                output_idx as u64,
-            );
+            current_pointer = TxOutputPointer::new(signed.hash()?.0.into(), output_idx as u64);
         }
 
         let elapsed = start_time.elapsed();
@@ -432,7 +423,7 @@ mod test {
                 .iter()
                 .max_by_key(|u| u.lovelace)
                 .context("wallet 1 empty")?;
-            hydrant::primitives::TxOutputPointer::from(output.clone())
+            TxOutputPointer::from(output.clone())
         };
 
         // Wait for Wallet 2 funds
@@ -440,7 +431,7 @@ mod test {
             let indexer = context.indexer.lock().await;
             let utxos = indexer.address_utxos(&wallet2.address().to_vec())?;
             if let Some(utxo) = utxos.first() {
-                break hydrant::primitives::TxOutputPointer::from(utxo.clone());
+                break TxOutputPointer::from(utxo.clone());
             }
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         };
