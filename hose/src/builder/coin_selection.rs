@@ -44,8 +44,10 @@ impl TxBuilder {
             (self.get_output_lovelace() + fee + min_change_lovelace + registration_deposit)
                 .saturating_sub(input_lovelace + withdrawal_lovelace + deregistration_refund);
 
+        let output_assets: AssetsDelta = self.get_output_assets().into();
+        let input_assets: AssetsDelta = input_assets.into();
         let mut required_assets: AssetsDelta =
-            self.get_output_assets().saturating_sub(input_assets).into();
+            output_assets - input_assets - self.body.mint.clone();
 
         // Select for assets
         while !possible_utxos.is_empty()
@@ -105,7 +107,15 @@ impl TxBuilder {
 
         let input_assets: AssetsDelta = self.get_input_assets(indexer).await?.into();
         let output_assets: AssetsDelta = self.get_output_assets().into();
-        let change_assets = input_assets - output_assets;
+        let change_assets = input_assets + self.body.mint.clone() - output_assets;
+        if !change_assets.only_negative().is_empty() {
+            tracing::error!(
+                "Negative change assets: {:#?}",
+                change_assets.only_negative()
+            );
+            return Err(anyhow::anyhow!("change cannot be negative"));
+        }
+        let change_assets = change_assets.only_positive();
 
         if change_lovelace == 0 && change_assets.only_positive().is_empty() {
             return Ok(None);

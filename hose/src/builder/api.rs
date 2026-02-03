@@ -2,14 +2,14 @@
 
 use std::collections::HashSet;
 
+use hydrant::primitives::{Asset, AssetId};
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
 
 use super::TxBuilder;
 use super::tx::StagingTransaction;
-use crate::primitives::{
-    Certificate, DatumOption, ExUnits, Hash, Input, Output, RewardAccount, ScriptKind,
-};
+use crate::builder::tx::TxBuilderError;
+use crate::primitives::{Certificate, DatumOption, Hash, Input, Output, RewardAccount, ScriptKind};
 
 impl TxBuilder {
     pub fn new(network: NetworkId, change_address: Address) -> Self {
@@ -36,13 +36,47 @@ impl TxBuilder {
         mut self,
         input: Input,
         plutus_data: Vec<u8>,
-        ex_units: Option<ExUnits>,
         script_kind: ScriptKind,
     ) -> Self {
         self.body = self.body.input(input.clone());
-        self.body = self.body.add_spend_redeemer(input, plutus_data, ex_units);
+        self.body = self.body.add_spend_redeemer(input, plutus_data, None);
         self.script_kinds.insert(script_kind);
         self
+    }
+
+    pub fn mint_asset(
+        self,
+        asset: Asset,
+        policy_script_kind: ScriptKind,
+        redeemer: Vec<u8>,
+    ) -> Result<Self, TxBuilderError> {
+        let amount =
+            i64::try_from(asset.quantity).map_err(|_| TxBuilderError::InvalidMintAmount)?;
+        self.mint_or_burn_asset(asset.into(), policy_script_kind, amount, redeemer)
+    }
+
+    pub fn burn_asset(
+        self,
+        asset: Asset,
+        policy_script_kind: ScriptKind,
+        redeemer: Vec<u8>,
+    ) -> Result<Self, TxBuilderError> {
+        let amount =
+            -i64::try_from(asset.quantity).map_err(|_| TxBuilderError::InvalidMintAmount)?;
+        self.mint_or_burn_asset(asset.into(), policy_script_kind, amount, redeemer)
+    }
+
+    fn mint_or_burn_asset(
+        mut self,
+        asset: AssetId,
+        policy_script_kind: ScriptKind,
+        amount: i64,
+        redeemer: Vec<u8>,
+    ) -> Result<Self, TxBuilderError> {
+        self.body = self.body.mint_asset(asset.policy, asset.name, amount)?;
+        self.body = self.body.add_mint_redeemer(asset.policy, redeemer, None);
+        self.script_kinds.insert(policy_script_kind);
+        Ok(self)
     }
 
     /// Manually add a collateral input to the transaction for consumption by the chain, if our
@@ -69,7 +103,6 @@ impl TxBuilder {
         // NOTE: Right now, redeemers and script execution aren't required by the ledger, but the
         // Conway CDDL mandates them and they'll become necessary after the next hard fork.
         redeemer: Option<Vec<u8>>,
-        ex_units: Option<ExUnits>,
     ) -> Self {
         self.body = self
             .body
@@ -79,7 +112,7 @@ impl TxBuilder {
             });
         if let Some(redeemer) = redeemer {
             // if a redeemer was provided, we attach the script and its ex_units as well
-            self.body = self.body.add_cert_redeemer(script_hash, redeemer, ex_units);
+            self.body = self.body.add_cert_redeemer(script_hash, redeemer, None);
             self.script_kinds.insert(script_kind);
         }
         self
@@ -93,7 +126,6 @@ impl TxBuilder {
         script_hash: Hash<28>,
         script_kind: ScriptKind,
         redeemer: Vec<u8>,
-        ex_units: Option<ExUnits>,
     ) -> Self {
         self.body = self
             .body
@@ -101,7 +133,7 @@ impl TxBuilder {
                 script_hash,
                 deposit: None,
             });
-        self.body = self.body.add_cert_redeemer(script_hash, redeemer, ex_units);
+        self.body = self.body.add_cert_redeemer(script_hash, redeemer, None);
         self.script_kinds.insert(script_kind);
         self
     }
@@ -118,7 +150,6 @@ impl TxBuilder {
         script_kind: ScriptKind,
         amount: u64,
         redeemer: Vec<u8>,
-        ex_units: Option<ExUnits>,
     ) -> Self {
         let network_id = self.body.network_id.unwrap_or(0);
         let reward_account =
@@ -126,7 +157,7 @@ impl TxBuilder {
         self.body = self.body.withdrawal(reward_account.clone(), amount);
         self.body = self
             .body
-            .add_reward_redeemer(reward_account, redeemer, ex_units);
+            .add_reward_redeemer(reward_account, redeemer, None);
         self.script_kinds.insert(script_kind);
         self
     }
