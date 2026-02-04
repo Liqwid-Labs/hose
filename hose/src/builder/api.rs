@@ -9,7 +9,9 @@ use pallas::ledger::primitives::NetworkId;
 use super::TxBuilder;
 use super::tx::StagingTransaction;
 use crate::builder::tx::TxBuilderError;
-use crate::primitives::{Certificate, DatumOption, Hash, Input, Output, RewardAccount, ScriptKind};
+use crate::primitives::{
+    Certificate, DatumOption, ExUnits, Hash, Input, Output, RewardAccount, ScriptKind,
+};
 
 impl TxBuilder {
     pub fn new(network: NetworkId, change_address: Address) -> Self {

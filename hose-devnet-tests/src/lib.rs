@@ -7,6 +7,7 @@ mod test {
     use hose_devnet::{empty_redeemer, nonced_always_succeeds_script, validator_to_address};
     use hydrant::primitives::TxOutputPointer;
     use pallas::codec::minicbor;
+    use pallas::ledger::addresses::{Address, ShelleyPaymentPart};
     use tracing::info;
 
     const MIN_ADA: u64 = 2_000_000;
