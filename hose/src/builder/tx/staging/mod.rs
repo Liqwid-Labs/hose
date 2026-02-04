@@ -347,11 +347,11 @@ impl StagingTransaction {
         self.certificates.retain(|c| match c {
             Certificate::StakeRegistration {
                 pub_key_hash: hash, ..
-            } => *hash != pub_key_hash,
-            Certificate::StakeDeregistration {
+            }
+            | Certificate::StakeDeregistration {
                 pub_key_hash: hash, ..
-            } => *hash != pub_key_hash,
-            Certificate::StakeDelegation {
+            }
+            | Certificate::StakeDelegation {
                 pub_key_hash: hash, ..
             } => *hash != pub_key_hash,
             _ => true,

@@ -165,7 +165,7 @@ impl StagingTransaction {
                     } => {
                         let cert_hash = *script_hash;
                         let script_hash: ScriptHash = cert_hash.into();
-                        let has_cert_redeemer = self.redeemers.as_ref().map_or(false, |rdmrs| {
+                        let has_cert_redeemer = self.redeemers.as_ref().is_some_and(|rdmrs| {
                             rdmrs.contains_key(&RedeemerPurpose::Cert(cert_hash))
                         });
                         if has_cert_redeemer {
@@ -249,7 +249,7 @@ impl StagingTransaction {
         let certificate_script_hashes = self
             .certificates
             .iter()
-            .map(|cert| cert.script_hash())
+            .flat_map(|cert| cert.script_hash())
             .collect::<Vec<_>>();
 
         let withdrawal_accounts = self
@@ -331,7 +331,7 @@ impl StagingTransaction {
                     RedeemerPurpose::Cert(script_hash) => {
                         let index = certificate_script_hashes
                             .iter()
-                            .position(|hash| hash == &Some(*script_hash))
+                            .position(|hash| hash == script_hash)
                             .ok_or(TxBuilderError::RedeemerTargetMissing)?
                             as u32;
 
