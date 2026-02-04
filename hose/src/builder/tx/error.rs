@@ -31,4 +31,9 @@ pub enum TxBuilderError {
     /// Mint/burn amount is out of range
     #[error("Invalid mint amount")]
     InvalidMintAmount,
+
+    #[error(
+        "Validity interval is disjoint with existing interval, making transaction invalid. This is likely a bug in your code."
+    )]
+    InvalidValidityInterval,
 }
