@@ -47,6 +47,22 @@ impl RewardAccount {
         Self::from_script_hash(network, script_hash)
     }
 
+    pub fn from_key_hash(network: Network, pub_key_hash: Hash<28>) -> Self {
+        let network_id = network_id_from_network(network);
+
+        let header = REWARD_ADDRESS_PREFIX | (network_id & REWARD_ADDRESS_NETWORK_MASK);
+        let mut bytes = Vec::with_capacity(1 + 28);
+        bytes.push(header);
+        bytes.extend_from_slice(&pub_key_hash.0);
+
+        RewardAccount(Bytes::from(bytes))
+    }
+
+    pub fn from_key_hash_with_network_id(network_id: u8, pub_key_hash: Hash<28>) -> Self {
+        let network = network_from_network_id(network_id);
+        Self::from_key_hash(network, pub_key_hash)
+    }
+
     pub fn as_bytes(&self) -> &Bytes {
         &self.0
     }

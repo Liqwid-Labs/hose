@@ -158,7 +158,7 @@ impl StagingTransaction {
             self.certificates
                 .iter()
                 .map(|cert| match cert {
-                    // TODO: handle key credentials as well
+                    // Script Registration
                     Certificate::StakeRegistrationScript {
                         script_hash,
                         deposit,
@@ -181,6 +181,7 @@ impl StagingTransaction {
                             ))
                         }
                     }
+                    // Script Deregistration
                     Certificate::StakeDeregistrationScript {
                         script_hash,
                         deposit,
@@ -193,6 +194,54 @@ impl StagingTransaction {
                             deposit,
                         ))
                     }
+                    // Script Delegation
+                    Certificate::StakeDelegationScript {
+                        script_hash,
+                        pool_id,
+                    } => {
+                        let script_hash: ScriptHash = (*script_hash).into();
+                        let pool_id: PallasHash<28> = (*pool_id).into();
+                        Ok(PallasCertificate::StakeDelegation(
+                            PallasStakeCredential::ScriptHash(script_hash),
+                            pool_id,
+                        ))
+                    }
+                    // Key Registration
+                    Certificate::StakeRegistration {
+                        pub_key_hash,
+                        deposit,
+                    } => {
+                        if let Some(deposit) = deposit {
+                            Ok(PallasCertificate::Reg(
+                                PallasStakeCredential::AddrKeyhash((*pub_key_hash).into()),
+                                *deposit,
+                            ))
+                        } else {
+                            Ok(PallasCertificate::StakeRegistration(
+                                PallasStakeCredential::AddrKeyhash((*pub_key_hash).into()),
+                            ))
+                        }
+                    }
+                    // Key Deregistration
+                    Certificate::StakeDeregistration {
+                        pub_key_hash,
+                        deposit,
+                    } => {
+                        let deposit =
+                            deposit.ok_or(TxBuilderError::MissingStakeCredentialDeposit)?;
+                        Ok(PallasCertificate::UnReg(
+                            PallasStakeCredential::AddrKeyhash((*pub_key_hash).into()),
+                            deposit,
+                        ))
+                    }
+                    // Key Delegation
+                    Certificate::StakeDelegation {
+                        pub_key_hash,
+                        pool_id,
+                    } => Ok(PallasCertificate::StakeDelegation(
+                        PallasStakeCredential::AddrKeyhash((*pub_key_hash).into()),
+                        (*pool_id).into(),
+                    )),
                 })
                 .collect::<Result<Vec<_>, _>>()?,
         );
@@ -282,7 +331,7 @@ impl StagingTransaction {
                     RedeemerPurpose::Cert(script_hash) => {
                         let index = certificate_script_hashes
                             .iter()
-                            .position(|hash| hash == script_hash)
+                            .position(|hash| hash == &Some(*script_hash))
                             .ok_or(TxBuilderError::RedeemerTargetMissing)?
                             as u32;
 

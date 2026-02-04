@@ -138,6 +138,66 @@ impl TxBuilder {
         self
     }
 
+    /// Delegate a script's stake to a stake pool.
+    pub fn delegate_script_stake(
+        mut self,
+        script_hash: Hash<28>,
+        pool_id: Hash<28>,
+        script_kind: ScriptKind,
+        redeemer: Option<Vec<u8>>,
+        ex_units: Option<ExUnits>,
+    ) -> Self {
+        self.body = self
+            .body
+            .add_certificate(Certificate::StakeDelegationScript {
+                script_hash,
+                pool_id,
+            });
+
+        if let Some(redeemer) = redeemer {
+            self.body = self.body.add_cert_redeemer(script_hash, redeemer, ex_units);
+            self.script_kinds.insert(script_kind);
+        }
+        self
+    }
+
+    /// Register a key's reward account and lock some lovelace as a deposit.
+    pub fn register_stake(mut self, pub_key_hash: Hash<28>) -> Self {
+        self.body = self.body.add_certificate(Certificate::StakeRegistration {
+            pub_key_hash,
+            deposit: None,
+        });
+        self
+    }
+
+    /// Deregister a key's reward account and refund the deposit.
+    pub fn deregister_stake(mut self, pub_key_hash: Hash<28>) -> Self {
+        self.body = self.body.add_certificate(Certificate::StakeDeregistration {
+            pub_key_hash,
+            deposit: None,
+        });
+        self
+    }
+
+    /// Delegate a key's stake to a stake pool.
+    pub fn delegate_stake(mut self, pub_key_hash: Hash<28>, pool_id: Hash<28>) -> Self {
+        self.body = self.body.add_certificate(Certificate::StakeDelegation {
+            pub_key_hash,
+            pool_id,
+        });
+        self
+    }
+
+    /// Withdraw rewards from a key's reward account.
+    ///
+    /// The account must have been registered beforehand.
+    pub fn withdraw_rewards(mut self, pub_key_hash: Hash<28>, amount: u64) -> Self {
+        let network_id = self.body.network_id.unwrap_or(0);
+        let reward_account = RewardAccount::from_key_hash_with_network_id(network_id, pub_key_hash);
+        self.body = self.body.withdrawal(reward_account, amount);
+        self
+    }
+
     /// Withdraw rewards from a script's reward account. Note that the account must have been
     /// registered beforehand with `register_script_stake`.
     ///

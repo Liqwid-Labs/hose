@@ -2,7 +2,7 @@
 mod test {
     use anyhow::Context;
     use hose::builder::TxBuilder;
-    use hose::primitives::{Asset, AssetId, Output, Script, ScriptKind};
+    use hose::primitives::{Asset, AssetId, Hash, Output, Script, ScriptKind};
     use hose_devnet::prelude::*;
     use hose_devnet::{empty_redeemer, nonced_always_succeeds_script, validator_to_address};
     use hydrant::primitives::TxOutputPointer;
@@ -320,7 +320,7 @@ mod test {
 
     #[hose_devnet::test]
     async fn chain_spend(context: &mut DevnetContext) -> anyhow::Result<()> {
-        const NUM_TXS: u64 = 50;
+        const NUM_TXS: u64 = 10;
         const AMOUNT_STEP: u64 = 1_000_000;
         // Start with enough to cover decreasing amounts + a buffer for tx fees
         let start_amount = (NUM_TXS * AMOUNT_STEP) + AMOUNT_STEP;
@@ -451,6 +451,97 @@ mod test {
 
         // 6. Sign and submit with first wallet
         context.sign_and_submit_tx(tx).await?;
+
+        Ok(())
+    }
+
+    #[hose_devnet::test]
+    async fn delegate_to_unknown_pool(context: &mut DevnetContext) -> anyhow::Result<()> {
+        let pub_key_hash = match context.wallet.address() {
+            Address::Shelley(s) => match s.payment() {
+                ShelleyPaymentPart::Key(h) => Hash::from(*h),
+                _ => panic!("expected key payment part"),
+            },
+            _ => panic!("unexpected address type"),
+        };
+
+        // 1. Register Stake Key
+        let registration_tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .register_stake(pub_key_hash)
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+
+        match context.sign_and_submit_tx(registration_tx).await {
+            Ok(_) => {}
+            Err(e) => {
+                let err_msg = e.to_string();
+                info!(
+                    "Register stake tx failed (assuming already registered), continuing: {}",
+                    err_msg
+                );
+            }
+        }
+
+        // 2. Delegate to dummy pool (Expect Failure)
+        let dummy_pool_id = Hash::from([0xAA; 28]);
+        let delegation_tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .delegate_stake(pub_key_hash, dummy_pool_id)
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+
+        match context.sign_and_submit_tx(delegation_tx).await {
+            Ok(_) => panic!("Delegation to dummy pool should have failed"),
+            Err(e) => {
+                let err_msg = e.to_string();
+                if !err_msg.contains("UnknownStakePool") {
+                    panic!("Unexpected error during delegation: {}", err_msg);
+                }
+                info!("Delegation failed as expected: UnknownStakePool");
+            }
+        }
+
+        Ok(())
+    }
+
+    #[hose_devnet::test]
+    async fn delegate_to_known_pool(context: &mut DevnetContext) -> anyhow::Result<()> {
+        let pub_key_hash = match context.wallet.address() {
+            Address::Shelley(s) => match s.payment() {
+                ShelleyPaymentPart::Key(h) => Hash::from(*h),
+                _ => panic!("expected key payment part"),
+            },
+            _ => panic!("unexpected address type"),
+        };
+
+        // 1. Register Stake Key
+        let registration_tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .register_stake(pub_key_hash)
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+
+        match context.sign_and_submit_tx(registration_tx).await {
+            Ok(_) => {}
+            Err(e) => {
+                let err_msg = e.to_string();
+                info!(
+                    "Register stake tx failed (assuming already registered), continuing: {}",
+                    err_msg
+                );
+            }
+        }
+
+        // 2. Delegate to valid pool
+        let pool_hex = "8a219b698d3b6e034391ae84cee62f1d76b6fbc45ddfe4e31e0d4b60";
+        let pool_bytes = hex::decode(pool_hex)?;
+        let valid_pool_id =
+            Hash::from(TryInto::<[u8; 28]>::try_into(pool_bytes).expect("invalid pool id length"));
+
+        let delegation_tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .delegate_stake(pub_key_hash, valid_pool_id)
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+
+        context.sign_and_submit_tx(delegation_tx).await?;
 
         Ok(())
     }

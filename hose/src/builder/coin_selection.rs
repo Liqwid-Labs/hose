@@ -172,8 +172,9 @@ impl TxBuilder {
             .certificates
             .iter()
             .filter_map(|cert| match cert {
+                Certificate::StakeRegistration { deposit, .. } => *deposit,
                 Certificate::StakeRegistrationScript { deposit, .. } => *deposit,
-                Certificate::StakeDeregistrationScript { .. } => None,
+                _ => None,
             })
             .sum()
     }
@@ -183,8 +184,9 @@ impl TxBuilder {
             .certificates
             .iter()
             .filter_map(|cert| match cert {
-                Certificate::StakeRegistrationScript { .. } => None,
+                Certificate::StakeDeregistration { deposit, .. } => *deposit,
                 Certificate::StakeDeregistrationScript { deposit, .. } => *deposit,
+                _ => None,
             })
             .sum()
     }

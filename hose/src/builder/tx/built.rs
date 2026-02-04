@@ -26,23 +26,19 @@ impl BuiltTransaction {
 
         let mut new_sigs = self.signatures.unwrap_or_default();
         new_sigs.insert(Hash(pubkey), Hash(signature));
-        self.signatures = Some(new_sigs);
+        self.signatures = Some(new_sigs.clone());
 
         // TODO: chance for serialisation round trip issues?
         let mut tx = conway::Tx::decode_fragment(&self.bytes)
             .map_err(|_| TxBuilderError::CorruptedTxBytes)?;
 
-        let mut vkey_witnesses = tx
-            .transaction_witness_set
-            .vkeywitness
-            .as_ref()
-            .map(|x| x.clone().to_vec())
-            .unwrap_or_default();
-
-        vkey_witnesses.push(conway::VKeyWitness {
-            vkey: Vec::from(pubkey.as_ref()).into(),
-            signature: Vec::from(signature.as_ref()).into(),
-        });
+        let mut vkey_witnesses = vec![];
+        for (pk, sig) in new_sigs {
+            vkey_witnesses.push(conway::VKeyWitness {
+                vkey: Vec::from(pk.0.as_ref()).into(),
+                signature: Vec::from(sig.0.as_ref()).into(),
+            });
+        }
 
         tx.transaction_witness_set.vkeywitness =
             Some(NonEmptySet::from_vec(vkey_witnesses).unwrap());
@@ -67,22 +63,20 @@ impl BuiltTransaction {
             ),
             Hash(signature),
         );
-        self.signatures = Some(new_sigs);
+        self.signatures = Some(new_sigs.clone());
 
         // TODO: chance for serialisation round trip issues?
         let mut tx = conway::Tx::decode_fragment(&self.bytes)
             .map_err(|_| TxBuilderError::CorruptedTxBytes)?;
 
-        let mut vkey_witnesses = tx
-            .transaction_witness_set
-            .vkeywitness
-            .as_ref()
-            .map(|x| x.clone().to_vec())
-            .unwrap_or_default();
-        vkey_witnesses.push(conway::VKeyWitness {
-            vkey: Vec::from(pub_key.as_ref()).into(),
-            signature: Vec::from(signature.as_ref()).into(),
-        });
+        let mut vkey_witnesses = vec![];
+        for (pk, sig) in new_sigs {
+            vkey_witnesses.push(conway::VKeyWitness {
+                vkey: Vec::from(pk.0.as_ref()).into(),
+                signature: Vec::from(sig.0.as_ref()).into(),
+            });
+        }
+
         tx.transaction_witness_set.vkeywitness =
             Some(NonEmptySet::from_vec(vkey_witnesses).unwrap());
 
