@@ -310,22 +310,16 @@ impl StagingTransaction {
                 Certificate::StakeRegistrationScript {
                     deposit: cert_deposit,
                     ..
-                } => {
-                    *cert_deposit = Some(deposit);
                 }
-                Certificate::StakeDeregistrationScript {
+                | Certificate::StakeDeregistrationScript {
                     deposit: cert_deposit,
                     ..
-                } => {
-                    *cert_deposit = Some(deposit);
                 }
-                Certificate::StakeRegistration {
+                | Certificate::StakeRegistration {
                     deposit: cert_deposit,
                     ..
-                } => {
-                    *cert_deposit = Some(deposit);
                 }
-                Certificate::StakeDeregistration {
+                | Certificate::StakeDeregistration {
                     deposit: cert_deposit,
                     ..
                 } => {
