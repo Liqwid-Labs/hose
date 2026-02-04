@@ -546,4 +546,88 @@ mod test {
 
         Ok(())
     }
+
+    #[hose_devnet::test]
+    async fn delegate_script_stake_to_known_pool(
+        context: &mut DevnetContext,
+    ) -> anyhow::Result<()> {
+        let script = nonced_always_succeeds_script()?;
+        let pool_hex = "8a219b698d3b6e034391ae84cee62f1d76b6fbc45ddfe4e31e0d4b60";
+        let pool_bytes = hex::decode(pool_hex)?;
+        let valid_pool_id =
+            Hash::from(TryInto::<[u8; 28]>::try_into(pool_bytes).expect("invalid pool id length"));
+
+        // 1. Register Script Stake
+        let registration_tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .register_script_stake(script.hash, script.kind, Some(empty_redeemer()))
+            .add_script(script.kind, script.bytes.clone())
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+
+        match context.sign_and_submit_tx(registration_tx).await {
+            Ok(_) => {}
+            Err(e) => {
+                let err_msg = e.to_string();
+                info!(
+                    "Register script stake tx failed (assuming already registered), continuing: {}",
+                    err_msg
+                );
+            }
+        }
+
+        // 2. Delegate Script Stake
+        let delegation_tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .delegate_script_stake(
+                script.hash,
+                valid_pool_id,
+                script.kind,
+                Some(empty_redeemer()),
+                None,
+            )
+            .add_script(script.kind, script.bytes.clone())
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+
+        context.sign_and_submit_tx(delegation_tx).await?;
+
+        Ok(())
+    }
+
+    #[hose_devnet::test]
+    async fn register_and_deregister_stake_key(context: &mut DevnetContext) -> anyhow::Result<()> {
+        let pub_key_hash = match context.wallet.address() {
+            Address::Shelley(s) => match s.payment() {
+                ShelleyPaymentPart::Key(h) => Hash::from(*h),
+                _ => panic!("expected key payment part"),
+            },
+            _ => panic!("unexpected address type"),
+        };
+
+        // 1. Register Stake Key
+        let registration_tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .register_stake(pub_key_hash)
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+
+        match context.sign_and_submit_tx(registration_tx).await {
+            Ok(_) => {}
+            Err(e) => {
+                let err_msg = e.to_string();
+                info!(
+                    "Register stake tx failed (assuming already registered), continuing: {}",
+                    err_msg
+                );
+            }
+        }
+
+        // 2. Deregister Stake Key
+        let deregistration_tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .deregister_stake(pub_key_hash)
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+
+        context.sign_and_submit_tx(deregistration_tx).await?;
+
+        Ok(())
+    }
 }
