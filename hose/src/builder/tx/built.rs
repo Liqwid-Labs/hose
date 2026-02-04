@@ -32,18 +32,18 @@ impl BuiltTransaction {
         let mut tx = conway::Tx::decode_fragment(&self.bytes)
             .map_err(|_| TxBuilderError::CorruptedTxBytes)?;
 
-        let mut vkey_witnesses = vec![];
-        for (pk, sig) in new_sigs {
-            vkey_witnesses.push(conway::VKeyWitness {
-                vkey: Vec::from(pk.0.as_ref()).into(),
-                signature: Vec::from(sig.0.as_ref()).into(),
-            });
-        }
+        let vkey_witnesses = new_sigs
+            .into_iter()
+            .map(|(pk, sig)| conway::VKeyWitness {
+                vkey: pk.to_vec().into(),
+                signature: sig.to_vec().into(),
+            })
+            .collect::<Vec<_>>();
 
         tx.transaction_witness_set.vkeywitness =
             Some(NonEmptySet::from_vec(vkey_witnesses).unwrap());
 
-        self.bytes = tx.encode_fragment().unwrap().into();
+        self.bytes = tx.encode_fragment().unwrap();
 
         Ok(self)
     }
@@ -69,18 +69,18 @@ impl BuiltTransaction {
         let mut tx = conway::Tx::decode_fragment(&self.bytes)
             .map_err(|_| TxBuilderError::CorruptedTxBytes)?;
 
-        let mut vkey_witnesses = vec![];
-        for (pk, sig) in new_sigs {
-            vkey_witnesses.push(conway::VKeyWitness {
-                vkey: Vec::from(pk.0.as_ref()).into(),
-                signature: Vec::from(sig.0.as_ref()).into(),
-            });
-        }
+        let vkey_witnesses = new_sigs
+            .into_iter()
+            .map(|(pk, sig)| conway::VKeyWitness {
+                vkey: pk.to_vec().into(),
+                signature: sig.to_vec().into(),
+            })
+            .collect::<Vec<_>>();
 
         tx.transaction_witness_set.vkeywitness =
             Some(NonEmptySet::from_vec(vkey_witnesses).unwrap());
 
-        self.bytes = tx.encode_fragment().unwrap().into();
+        self.bytes = tx.encode_fragment().unwrap();
 
         Ok(self)
     }
@@ -113,7 +113,7 @@ impl BuiltTransaction {
         tx.transaction_witness_set.vkeywitness =
             Some(NonEmptySet::from_vec(vkey_witnesses).unwrap());
 
-        self.bytes = tx.encode_fragment().unwrap().into();
+        self.bytes = tx.encode_fragment().unwrap();
 
         Ok(self)
     }
