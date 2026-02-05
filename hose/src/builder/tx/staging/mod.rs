@@ -297,8 +297,9 @@ impl StagingTransaction {
     }
 
     pub fn add_certificate(mut self, certificate: Certificate) -> Self {
-        let script_hash = certificate.script_hash();
-        self.certificates.retain(|c| c.script_hash() != script_hash);
+        let credential_hash = certificate.credential_hash();
+        self.certificates
+            .retain(|c| c.credential_hash() != credential_hash);
         self.certificates.push(certificate);
         self
     }
@@ -309,22 +310,46 @@ impl StagingTransaction {
                 Certificate::StakeRegistrationScript {
                     deposit: cert_deposit,
                     ..
-                } => {
-                    *cert_deposit = Some(deposit);
                 }
-                Certificate::StakeDeregistrationScript {
+                | Certificate::StakeDeregistrationScript {
+                    deposit: cert_deposit,
+                    ..
+                }
+                | Certificate::StakeRegistration {
+                    deposit: cert_deposit,
+                    ..
+                }
+                | Certificate::StakeDeregistration {
                     deposit: cert_deposit,
                     ..
                 } => {
                     *cert_deposit = Some(deposit);
                 }
+                _ => {}
             }
         }
         self
     }
 
     pub fn remove_certificate_by_script_hash(mut self, script_hash: Hash<28>) -> Self {
-        self.certificates.retain(|c| c.script_hash() != script_hash);
+        self.certificates
+            .retain(|c| c.script_hash() != Some(script_hash));
+        self
+    }
+
+    pub fn remove_certificate_by_pub_key_hash(mut self, pub_key_hash: Hash<28>) -> Self {
+        self.certificates.retain(|c| match c {
+            Certificate::StakeRegistration {
+                pub_key_hash: hash, ..
+            }
+            | Certificate::StakeDeregistration {
+                pub_key_hash: hash, ..
+            }
+            | Certificate::StakeDelegation {
+                pub_key_hash: hash, ..
+            } => *hash != pub_key_hash,
+            _ => true,
+        });
         self
     }
 

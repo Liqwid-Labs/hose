@@ -13,6 +13,7 @@ use tokio::sync::Mutex;
 
 use super::TxBuilder;
 use crate::builder::tx::StagingTransaction;
+use crate::primitives::Certificate;
 
 impl TxBuilder {
     /// Returns the minimum lovelace for a transaction
@@ -46,6 +47,29 @@ impl TxBuilder {
                 && let ShelleyPaymentPart::Key(hash) = shelley_addr.payment()
             {
                 signers.insert(*hash);
+            }
+        }
+
+        for cert in &tx.certificates {
+            match cert {
+                Certificate::StakeRegistration { pub_key_hash, .. }
+                | Certificate::StakeDeregistration { pub_key_hash, .. }
+                | Certificate::StakeDelegation { pub_key_hash, .. } => {
+                    signers.insert(pub_key_hash.0.into());
+                }
+                _ => {}
+            }
+        }
+
+        for account in tx.withdrawals.keys() {
+            let bytes = account.as_ref();
+            if !bytes.is_empty() && (bytes[0] & 0x10) == 0 {
+                // Key-based reward account
+                if bytes.len() >= 29 {
+                    let mut hash = [0u8; 28];
+                    hash.copy_from_slice(&bytes[1..29]);
+                    signers.insert(hash.into());
+                }
             }
         }
 
