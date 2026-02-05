@@ -4,6 +4,7 @@ use std::collections::HashSet;
 
 use hydrant::primitives::{Asset, AssetId};
 use intervals_general::Interval;
+use intervals_general::bound_pair::BoundPair;
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
 
@@ -187,22 +188,34 @@ impl TxBuilder {
     /// Sets the start of the validity interval for the transaction.
     ///
     /// Inclusive. If you care about different inclusivity, use `validity_interval` instead.
-    pub fn valid_from(mut self, _timestamp: u64) -> Result<Self, TxBuilderError> {
-        let interval = Interval::UnboundedClosedLeft { left: _timestamp };
-        self = self.validity_interval(interval)?;
-        Ok(self)
-    }
-    pub fn valid_to(mut self, _timestamp: u64) -> Result<TxBuilder, TxBuilderError> {
-        let interval = Interval::UnboundedClosedRight { right: _timestamp };
+    pub fn valid_from(mut self, slot: u64) -> Result<Self, TxBuilderError> {
+        let interval = Interval::UnboundedClosedLeft { left: slot };
         self = self.validity_interval(interval)?;
         Ok(self)
     }
 
-    /// Bounds the validity interval of the transaction by a given interval. Note that
+    /// Sets the end of the validity interval for the transaction.
+    ///
+    /// Inclusive. If you care about different inclusivity, use `validity_interval` instead.
+    pub fn valid_to(mut self, slot: u64) -> Result<TxBuilder, TxBuilderError> {
+        let interval = Interval::UnboundedClosedRight { right: slot };
+        self = self.validity_interval(interval)?;
+        Ok(self)
+    }
+
+    /// Bounds the validity interval of the transaction by a given slot interval. Note that
     /// if you have previously bounded it, they will be intersected. If they are disjoint,
     /// the result will be the empty interval, making your transaction invalid.
-    pub fn validity_interval(mut self, interval: Interval<u64>) -> Result<Self, TxBuilderError> {
-        let new_interval = self.validity_interval.intersect(&interval);
+    ///
+    /// Example:
+    /// ```
+    /// builder.validity_interval(Interval::Closed { bound_pair: BoundPair::new(5, 10).unwrap() })
+    /// ```
+    pub fn validity_interval(
+        mut self,
+        slot_interval: Interval<u64>,
+    ) -> Result<Self, TxBuilderError> {
+        let new_interval = self.validity_interval.intersect(&slot_interval);
         match new_interval {
             Interval::Empty => Err(TxBuilderError::InvalidValidityInterval),
             _ => {

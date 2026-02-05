@@ -132,37 +132,56 @@ impl TxBuilder {
     }
 
     pub fn apply_validity_interval(mut self, validity_interval: &Interval<u64>) -> Result<Self> {
+        // Note: Cardano validity interval semantics.
+        //
+        // Cardano treats the validity interval as a left-half-open interval, i.e. [start, end)
+        // Therefore, we need to adjust the start and end slots to account for this.
+        //
         match validity_interval {
             Interval::Closed { bound_pair: pair } => {
                 self.body = self.body.valid_from_slot(*pair.left());
-                self.body = self.body.invalid_from_slot(*pair.right());
+                self.body = self.body.invalid_from_slot(*pair.right() - 1);
             }
             Interval::UnboundedClosedLeft { left } => {
+                // specified: [start, +inf)
                 self.body = self.body.valid_from_slot(*left);
             }
             Interval::UnboundedClosedRight { right } => {
-                self.body = self.body.invalid_from_slot(*right);
+                // specified: (-inf, end]
+                self.body = self.body.invalid_from_slot(*right - 1);
             }
             Interval::UnboundedOpenLeft { left } => {
-                self.body = self.body.valid_from_slot(left + 1);
+                // specified: (start, +inf)
+                self.body = self.body.valid_from_slot(*left - 1);
             }
             Interval::UnboundedOpenRight { right } => {
-                self.body = self.body.invalid_from_slot(right - 1);
+                // specified: (-inf, end)
+                self.body = self.body.invalid_from_slot(*right);
             }
-            Interval::Unbounded => {}
+            Interval::Unbounded => {
+                // specified: (-inf, +inf)
+            }
             Interval::Open { bound_pair } => {
-                self.body = self.body.valid_from_slot(*bound_pair.left() + 1);
-                self.body = self.body.invalid_from_slot(*bound_pair.right() - 1);
-            }
-            Interval::LeftHalfOpen { bound_pair } => {
+                // specified: (start, end)
                 self.body = self.body.valid_from_slot(*bound_pair.left() + 1);
                 self.body = self.body.invalid_from_slot(*bound_pair.right());
             }
-            Interval::RightHalfOpen { bound_pair } => {
-                self.body = self.body.valid_from_slot(*bound_pair.left());
+            Interval::LeftHalfOpen { bound_pair } => {
+                // specified: (start, end]
+                self.body = self.body.valid_from_slot(*bound_pair.left() + 1);
                 self.body = self.body.invalid_from_slot(*bound_pair.right() - 1);
             }
-            Interval::Singleton { at } => todo!(),
+            Interval::RightHalfOpen { bound_pair } => {
+                // specified: [start, end)
+                // no adjustment needed!
+                self.body = self.body.valid_from_slot(*bound_pair.left());
+                self.body = self.body.invalid_from_slot(*bound_pair.right());
+            }
+            Interval::Singleton { at } => {
+                // specified: [start, end], where start == end
+                self.body = self.body.valid_from_slot(*at);
+                self.body = self.body.invalid_from_slot(*at + 1);
+            }
 
             Interval::Empty => {
                 bail!("Validity interval is empty. This is likely a bug in hose.");
