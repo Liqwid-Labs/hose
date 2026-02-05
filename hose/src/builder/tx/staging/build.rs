@@ -374,15 +374,19 @@ impl StagingTransaction {
         // Construct dummy witnesses if requested
         let witness_set_vkeys = None;
 
-        let script_data_hash = self.language_view.map(|language_view| {
-            let dta = pallas::ledger::primitives::conway::ScriptData {
-                redeemers: Some(witness_set_redeemers.clone()),
-                datums: witness_set_datums.clone(),
-                language_view: Some(language_view),
-            };
+        let script_data_hash = if !redeemers.is_empty() || witness_set_datums.is_some() {
+            self.language_view.map(|language_view| {
+                let dta = pallas::ledger::primitives::conway::ScriptData {
+                    redeemers: Some(witness_set_redeemers.clone()),
+                    datums: witness_set_datums.clone(),
+                    language_view: Some(language_view),
+                };
 
-            dta.hash()
-        });
+                dta.hash()
+            })
+        } else {
+            None
+        };
 
         let mut pallas_tx: Tx = Tx {
             transaction_body: TransactionBody {

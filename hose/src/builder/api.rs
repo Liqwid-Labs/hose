@@ -52,6 +52,9 @@ impl TxBuilder {
         policy_script_kind: ScriptKind,
         redeemer: Vec<u8>,
     ) -> Result<Self, TxBuilderError> {
+        if asset.quantity == 0 {
+            return Ok(self);
+        }
         let amount =
             i64::try_from(asset.quantity).map_err(|_| TxBuilderError::InvalidMintAmount)?;
         self.mint_or_burn_asset(asset.into(), policy_script_kind, amount, redeemer)
@@ -63,6 +66,9 @@ impl TxBuilder {
         policy_script_kind: ScriptKind,
         redeemer: Vec<u8>,
     ) -> Result<Self, TxBuilderError> {
+        if asset.quantity == 0 {
+            return Ok(self);
+        }
         let amount =
             -i64::try_from(asset.quantity).map_err(|_| TxBuilderError::InvalidMintAmount)?;
         self.mint_or_burn_asset(asset.into(), policy_script_kind, amount, redeemer)
@@ -75,8 +81,25 @@ impl TxBuilder {
         amount: i64,
         redeemer: Vec<u8>,
     ) -> Result<Self, TxBuilderError> {
+        let asset_id = asset.clone();
         self.body = self.body.mint_asset(asset.policy, asset.name, amount)?;
-        self.body = self.body.add_mint_redeemer(asset.policy, redeemer, None);
+        if let Some(quantity) = self.body.mint.get(&asset_id).copied() {
+            if quantity == 0 {
+                self.body.mint.remove(&asset_id);
+            }
+        }
+
+        let has_policy_mint = self
+            .body
+            .mint
+            .iter()
+            .any(|(id, quantity)| id.policy == asset_id.policy && *quantity != 0);
+        if has_policy_mint {
+            self.body = self.body.add_mint_redeemer(asset_id.policy, redeemer, None);
+        } else {
+            self.body = self.body.remove_mint_redeemer(asset_id.policy);
+        }
+
         self.script_kinds.insert(policy_script_kind);
         Ok(self)
     }
