@@ -454,4 +454,68 @@ mod test {
 
         Ok(())
     }
+
+    mod validity_interval_tests {
+        use intervals_general::Interval;
+        use intervals_general::bound_pair::BoundPair;
+        use ogmios_client::method::tip::Tip;
+
+        use super::*;
+
+        #[hose_devnet::test]
+        async fn inclusive_validity_interval(context: &mut DevnetContext) -> anyhow::Result<()> {
+            let tip = context.ogmios.query_tip().await?;
+            let (valid_from, valid_to) = match tip {
+                Tip::Point { slot, .. } => (slot, slot + 100),
+                Tip::Origin => (0, 100),
+            };
+
+            let tx = TxBuilder::new(context.network_id, context.wallet.address())
+                .valid_from(valid_from)?
+                .valid_to(valid_to)?
+                .add_output(Output::new(context.wallet.address(), 10_000_000))
+                .build(&context.indexer, &context.ogmios, &context.protocol_params)
+                .await?;
+            context.sign_and_submit_tx(tx).await?;
+            Ok(())
+        }
+
+        #[hose_devnet::test]
+        async fn unbounded_validity_interval(context: &mut DevnetContext) -> anyhow::Result<()> {
+            let tip = context.ogmios.query_tip().await?;
+            let valid_to = match tip {
+                Tip::Point { slot, .. } => slot + 100,
+                Tip::Origin => 100,
+            };
+
+            let tx = TxBuilder::new(context.network_id, context.wallet.address())
+                .valid_to(valid_to)?
+                .add_output(Output::new(context.wallet.address(), 10_000_000))
+                .build(&context.indexer, &context.ogmios, &context.protocol_params)
+                .await?;
+            context.sign_and_submit_tx(tx).await?;
+            Ok(())
+        }
+
+        #[hose_devnet::test]
+        async fn exclusive_validity_interval(context: &mut DevnetContext) -> anyhow::Result<()> {
+            let tip = context.ogmios.query_tip().await?;
+            let (valid_from, valid_to) = match tip {
+                Tip::Point { slot, .. } => (slot, slot + 100),
+                Tip::Origin => (0, 100),
+            };
+
+            let interval = Interval::Open {
+                bound_pair: BoundPair::new(valid_from, valid_to).expect("invalid bound pair"),
+            };
+
+            let tx = TxBuilder::new(context.network_id, context.wallet.address())
+                .add_output(Output::new(context.wallet.address(), 10_000_000))
+                .validity_interval(interval)?
+                .build(&context.indexer, &context.ogmios, &context.protocol_params)
+                .await?;
+            context.sign_and_submit_tx(tx).await?;
+            Ok(())
+        }
+    }
 }

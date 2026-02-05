@@ -13,6 +13,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
+intervals-general = { workspace = true }
 
 pallas = { workspace = true }
 hydrant = { workspace = true }
@@ -30,4 +31,3 @@ cryptoxide = { version = "0.5", features = [
     "sha2",
 ], default-features = false }
 ed25519-bip32 = "0.4"
-
