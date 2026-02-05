@@ -209,7 +209,15 @@ impl TxBuilder {
     ///
     /// Example:
     /// ```
-    /// builder.validity_interval(Interval::Closed { bound_pair: BoundPair::new(5, 10).unwrap() })
+    /// use intervals_general::{bound_pair::BoundPair, Interval};
+    /// use pallas::ledger::addresses::Address;
+    /// use pallas::ledger::primitives::NetworkId;
+    /// use hose::builder::TxBuilder;
+    /// let address = Address::from_bech32("addr1q9ct3v9ru6j8my2f6twme6gxsus670ul7pnnn4ervc0wylww7949sr6lj64c0u8ej9apt36czqm0umgd2qgjnxyrhnpqeeqvsy").unwrap();
+    /// let builder =
+    ///   TxBuilder::new(NetworkId::Mainnet, address)
+    ///     .validity_interval(Interval::Closed { bound_pair: BoundPair::new(5, 10).unwrap() });
+    /// ()
     /// ```
     pub fn validity_interval(
         mut self,
