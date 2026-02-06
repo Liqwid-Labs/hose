@@ -21,6 +21,7 @@ impl TxBuilder {
             change_address,
             change_datum: None,
             script_kinds: HashSet::new(),
+            fee_padding: 0,
         }
     }
 
@@ -285,6 +286,13 @@ impl TxBuilder {
     }
     pub fn add_signer(mut self, pub_key_hash: Hash<28>) -> Self {
         self.body = self.body.disclosed_signer(pub_key_hash);
+        self
+    }
+
+    // Used to avoid fee oscillation/underestimation in devnet admin-upgrade flows.
+    /// Adds a fixed lovelace buffer to the computed minimum fee.
+    pub fn fee_padding(mut self, padding: u64) -> Self {
+        self.fee_padding = padding;
         self
     }
 

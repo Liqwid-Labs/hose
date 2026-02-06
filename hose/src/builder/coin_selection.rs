@@ -61,7 +61,9 @@ impl TxBuilder {
                 break;
             }
 
+            // Account for lovelace in asset-selected UTxOs so required_lovelace isn't overstated.
             required_assets = required_assets - utxo.assets.clone().into();
+            required_lovelace = required_lovelace.saturating_sub(utxo.lovelace);
             selected_utxos.push(utxo.clone());
         }
 

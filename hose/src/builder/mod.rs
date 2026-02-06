@@ -28,6 +28,8 @@ pub struct TxBuilder {
     change_address: Address,
     change_datum: Option<DatumOption>,
     script_kinds: HashSet<ScriptKind>,
+    // Optional fee buffer for flows that otherwise under-estimate during evaluation.
+    fee_padding: u64,
 }
 
 // TODO: redeemers, auxillary data, language view, delegation, governance
@@ -61,6 +63,8 @@ impl TxBuilder {
         // balance inputs/outputs with fee in a loop until stable
         let (mut fee, mut evaluation) =
             TxBuilder::min_fee(&self.body, indexer, ogmios, pparams, None).await?;
+        // Apply optional padding for known fee-estimation edge cases.
+        fee = fee.saturating_add(self.fee_padding);
         self.body = self.body.fee(fee);
 
         let mut loop_count = 0;
@@ -105,6 +109,8 @@ impl TxBuilder {
                 Some(evaluation.clone()),
             )
             .await?;
+            // Keep the same padding across iterations.
+            let next_fee = next_fee.saturating_add(self.fee_padding);
 
             // Same as the last iteration, fully balanced
             if next_fee == fee {
@@ -125,6 +131,7 @@ impl TxBuilder {
             .context("failed to build transaction")?;
         Ok(BuiltTx::new(self.body, tx))
     }
+
 }
 
 pub fn language_view_for_script_kind(
