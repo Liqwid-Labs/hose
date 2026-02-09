@@ -504,6 +504,40 @@ mod test {
     }
 
     #[hose_devnet::test]
+    async fn admin_upgrade_like_tx_fails_with_fee_too_small_when_signer_not_disclosed(
+        context: &mut DevnetContext,
+    ) -> anyhow::Result<()> {
+        let tx = build_admin_upgrade_like_tx(context, false, false).await?;
+
+        match context.sign_and_submit_tx(tx).await {
+            Ok(_) => panic!("expected fee-too-small submission failure when signer is not disclosed"),
+            Err(err) => {
+                let err_msg = err.to_string();
+                let lower = err_msg.to_lowercase();
+                ensure!(
+                    err_msg.contains("FeeTooSmallUTxO")
+                        || err_msg.contains("TransactionFeeTooSmall")
+                        || lower.contains("fee too small"),
+                    "expected fee-too-small error, got: {}",
+                    err_msg
+                );
+                info!("Observed expected underfunded-fee failure: {}", err_msg);
+            }
+        }
+
+        Ok(())
+    }
+
+    #[hose_devnet::test]
+    async fn admin_upgrade_like_tx_succeeds_when_all_signers_declared(
+        context: &mut DevnetContext,
+    ) -> anyhow::Result<()> {
+        let tx = build_admin_upgrade_like_tx(context, true, true).await?;
+        context.sign_and_submit_tx(tx).await?;
+        Ok(())
+    }
+
+    #[hose_devnet::test]
     async fn delegate_to_unknown_pool(context: &mut DevnetContext) -> anyhow::Result<()> {
         let pub_key_hash = match context.wallet.address() {
             Address::Shelley(s) => match s.payment() {
@@ -676,5 +710,97 @@ mod test {
         context.sign_and_submit_tx(deregistration_tx).await?;
 
         Ok(())
+    }
+
+    fn payment_pub_key_hash(address: &Address) -> anyhow::Result<Hash<28>> {
+        match address {
+            Address::Shelley(shelley) => match shelley.payment() {
+                ShelleyPaymentPart::Key(hash) => Ok(Hash::from(*hash)),
+                _ => anyhow::bail!("expected key payment part"),
+            },
+            _ => anyhow::bail!("expected shelley address"),
+        }
+    }
+
+    async fn build_admin_upgrade_like_tx(
+        context: &mut DevnetContext,
+        disclose_second_signer: bool,
+        include_output_script_ref: bool,
+    ) -> anyhow::Result<hose::builder::BuiltTx> {
+        let script_a = nonced_always_succeeds_script()?;
+        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+        let mut script_b = nonced_always_succeeds_script()?;
+        if script_b.hash == script_a.hash {
+            tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+            script_b = nonced_always_succeeds_script()?;
+        }
+        ensure!(
+            script_a.hash != script_b.hash,
+            "failed to create distinct scripts for admin-upgrade-like fixture"
+        );
+
+        for script in [&script_a, &script_b] {
+            let register_tx = TxBuilder::new(context.network_id, context.wallet.address())
+                .register_script_stake(script.hash, script.kind, None)
+                .build(&context.indexer, &context.ogmios, &context.protocol_params)
+                .await?;
+
+            if let Err(err) = context.sign_and_submit_tx(register_tx).await {
+                let message = err.to_string();
+                if !message.contains("already known credentials") {
+                    return Err(err)
+                        .context("register script stake in admin-upgrade-like fixture");
+                }
+            }
+        }
+
+        let script_a_address = validator_to_address(context, &script_a);
+        let deploy_tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .add_output(Output::new(script_a_address.clone(), MIN_ADA + 1_000_000))
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+        let (signed_deploy, _) = context.sign_and_submit_tx(deploy_tx).await?;
+
+        let script_input_idx = signed_deploy
+            .body()
+            .outputs
+            .iter()
+            .position(|output| output.address == script_a_address)
+            .context("script output not found for admin-upgrade-like fixture")?;
+        let script_input = TxOutputPointer::new(signed_deploy.hash()?, script_input_idx as u64);
+
+        let original_key_hex = &context.config.private_key_hex;
+        let mut key_bytes = hex::decode(original_key_hex)?;
+        key_bytes[0] = key_bytes[0].wrapping_add(1);
+        let wallet2 = hose::wallet::WalletBuilder::new(context.config.network)
+            .from_hex(hex::encode(key_bytes))?;
+
+        let wallet1_pkh = payment_pub_key_hash(&context.wallet.address())?;
+        let wallet2_pkh = payment_pub_key_hash(&wallet2.address())?;
+
+        let mut tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .add_script_input(script_input.into(), empty_redeemer(), script_a.kind)
+            .withdraw_from_script(script_a.hash, script_a.kind, 0, empty_redeemer())
+            .withdraw_from_script(script_b.hash, script_b.kind, 0, empty_redeemer())
+            .add_script(script_a.kind, script_a.bytes.clone())
+            .add_script(script_b.kind, script_b.bytes.clone())
+            .add_signer(wallet1_pkh);
+        if include_output_script_ref {
+            let mut script_ref_output =
+                Output::new(context.wallet.address(), 0).set_script(script_b.kind, script_b.bytes.clone());
+            script_ref_output.lovelace = script_ref_output
+                .min_deposit(&context.protocol_params)?
+                .saturating_add(1_000_000);
+            tx = tx.add_output(script_ref_output);
+        }
+        if disclose_second_signer {
+            tx = tx.add_signer(wallet2_pkh);
+        }
+
+        let tx = tx
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+        let tx = tx.sign(&wallet2)?;
+        Ok(tx)
     }
 }
