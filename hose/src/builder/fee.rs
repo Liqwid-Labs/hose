@@ -15,12 +15,7 @@ use super::TxBuilder;
 use crate::builder::tx::StagingTransaction;
 use crate::primitives::Certificate;
 
-pub fn ref_script_fee(
-    total_script_size: u64,
-    range: u64,
-    base: f64,
-    multiplier: f64,
-) -> u64 {
+pub fn ref_script_fee(total_script_size: u64, range: u64, base: f64, multiplier: f64) -> u64 {
     if total_script_size == 0 {
         return 0;
     }
@@ -163,7 +158,7 @@ impl TxBuilder {
         min_fee += total_cpu * pparams.script_execution_prices.cpu.0.clone();
         min_fee += total_mem * pparams.script_execution_prices.memory.0.clone();
 
-        // Fee from reference script sizes (in tx outputs/collateral return and reference inputs)
+        // Fee from reference script sizes (in tx outputs/collateral return (?) and reference inputs)
         // https://github.com/IntersectMBO/cardano-ledger/blob/master/docs/adr/2024-08-14_009-refscripts-fee-change.md
         let mut total_script_size: u64 = tx
             .outputs
@@ -171,7 +166,8 @@ impl TxBuilder {
             .flat_map(|output| output.script.as_ref())
             .map(|script| script.bytes.len() as u64)
             .sum();
-        total_script_size += tx.collateral_output
+        total_script_size += tx
+            .collateral_output
             .iter()
             .flat_map(|output| output.script.as_ref())
             .map(|script| script.bytes.len() as u64)
@@ -202,8 +198,7 @@ impl TxBuilder {
             let range = pparams.min_fee_reference_scripts.range as u64;
             let base = pparams.min_fee_reference_scripts.base;
             let multiplier = pparams.min_fee_reference_scripts.multiplier;
-            let ref_script_fee =
-                ref_script_fee(total_script_size, range, base, multiplier);
+            let ref_script_fee = ref_script_fee(total_script_size, range, base, multiplier);
             min_fee += BigRational::from_integer(ref_script_fee.into());
         }
 

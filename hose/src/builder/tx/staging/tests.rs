@@ -219,7 +219,10 @@ fn build_includes_key_delegation_certificate() {
         .as_ref()
         .expect("certificates missing");
     let certs_vec: Vec<PallasCertificate> = certs.iter().cloned().collect();
-    assert!(matches!(certs_vec[0], PallasCertificate::StakeDelegation(_, _)));
+    assert!(matches!(
+        certs_vec[0],
+        PallasCertificate::StakeDelegation(_, _)
+    ));
 }
 
 #[test]
@@ -245,7 +248,10 @@ fn build_includes_delegation_certificate_and_redeemer() {
         .as_ref()
         .expect("certificates missing");
     let certs_vec: Vec<PallasCertificate> = certs.iter().cloned().collect();
-    assert!(matches!(certs_vec[0], PallasCertificate::StakeDelegation(_, _)));
+    assert!(matches!(
+        certs_vec[0],
+        PallasCertificate::StakeDelegation(_, _)
+    ));
 
     let redeemers = decoded
         .transaction_witness_set

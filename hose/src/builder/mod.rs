@@ -201,13 +201,14 @@ impl BuiltTx {
 
 #[cfg(test)]
 mod tests {
-    use super::TxBuilder;
-    use crate::primitives::{Asset, Hash, RedeemerPurpose, ScriptKind};
     use pallas::ledger::addresses::{
         Address as PallasAddress, Network, ShelleyAddress, ShelleyDelegationPart,
         ShelleyPaymentPart,
     };
     use pallas::ledger::primitives::NetworkId;
+
+    use super::TxBuilder;
+    use crate::primitives::{Asset, Hash, RedeemerPurpose, ScriptKind};
 
     fn dummy_address() -> PallasAddress {
         let payment_hash = Hash([1u8; 28]);
@@ -225,44 +226,6 @@ mod tests {
             .as_ref()
             .map(|redeemers| redeemers.contains_key(&RedeemerPurpose::Mint(policy)))
             .unwrap_or(false)
-    }
-
-    #[test]
-    fn mint_zero_is_noop() {
-        let policy = Hash([2u8; 28]);
-        let builder = TxBuilder::new(NetworkId::Testnet, dummy_address())
-            .mint_asset(
-                Asset {
-                    policy,
-                    name: b"ZERO".to_vec(),
-                    quantity: 0,
-                },
-                ScriptKind::PlutusV3,
-                vec![0u8],
-            )
-            .expect("mint zero");
-
-        assert!(builder.body.mint.is_empty());
-        assert!(!has_mint_redeemer(&builder, policy));
-    }
-
-    #[test]
-    fn burn_zero_is_noop() {
-        let policy = Hash([3u8; 28]);
-        let builder = TxBuilder::new(NetworkId::Testnet, dummy_address())
-            .burn_asset(
-                Asset {
-                    policy,
-                    name: b"ZERO".to_vec(),
-                    quantity: 0,
-                },
-                ScriptKind::PlutusV3,
-                vec![0u8],
-            )
-            .expect("burn zero");
-
-        assert!(builder.body.mint.is_empty());
-        assert!(!has_mint_redeemer(&builder, policy));
     }
 
     #[test]

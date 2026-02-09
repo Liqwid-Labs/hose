@@ -109,7 +109,7 @@ impl Output {
         // the constant overhead of 160 bytes accounts for the transaction input and
         // the entry in the UTxO map data structure (20 words * 8 bytes)
         // https://cips.cardano.org/cip/CIP-55#the-new-minimum-lovelace-calculation
-        // Buffer a few bytes to avoid occasional underfunded min-UTxO due to size undercount.
+        // FIXME: we should not need this buffer, but some devnet tests fail without it.
         const MIN_UTXO_SIZE_BUFFER: u64 = 4;
         Ok(pparams.min_utxo_deposit_constant.lovelace
             + pparams.min_utxo_deposit_coefficient

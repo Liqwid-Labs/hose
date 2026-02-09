@@ -261,7 +261,8 @@ impl StagingTransaction {
         let mut redeemers = vec![];
 
         if let Some(rdmrs) = self.redeemers {
-            // Align redeemer indices with the evaluation order (purpose + index, with spend ordinals).
+            // Align redeemer indices with the ledger order (purpose + index, with spend ordinals),
+            // not simply the HashMap iteration order.
             let spend_keys: HashSet<([u8; 32], u64)> = rdmrs
                 .keys()
                 .filter_map(|purpose| match purpose {
@@ -284,15 +285,7 @@ impl StagingTransaction {
                         let index = inputs
                             .iter()
                             .position(|x| (*x.transaction_id, x.index) == (txin.hash.0, txin.index))
-                            .ok_or_else(|| {
-                                eprintln!(
-                                    "missing spend redeemer target: {}#{} (inputs={:?})",
-                                    txin.hash,
-                                    txin.index,
-                                    inputs
-                                );
-                                TxBuilderError::RedeemerTargetMissing
-                            })?
+                            .ok_or(TxBuilderError::RedeemerTargetMissing)?
                             as u32;
                         (RedeemerTag::Spend, index)
                     }
@@ -300,14 +293,7 @@ impl StagingTransaction {
                         let index = mint_policies
                             .iter()
                             .position(|x| x.as_slice() == pid.0)
-                            .ok_or_else(|| {
-                                eprintln!(
-                                    "missing mint redeemer target: {:?} (mint_policies={:?})",
-                                    pid,
-                                    mint_policies
-                                );
-                                TxBuilderError::RedeemerTargetMissing
-                            })?
+                            .ok_or(TxBuilderError::RedeemerTargetMissing)?
                             as u32;
                         (RedeemerTag::Mint, index)
                     }
@@ -315,14 +301,7 @@ impl StagingTransaction {
                         let index = certificate_script_hashes
                             .iter()
                             .position(|hash| hash == script_hash)
-                            .ok_or_else(|| {
-                                eprintln!(
-                                    "missing cert redeemer target: {:?} (certs={:?})",
-                                    script_hash,
-                                    certificate_script_hashes
-                                );
-                                TxBuilderError::RedeemerTargetMissing
-                            })?
+                            .ok_or(TxBuilderError::RedeemerTargetMissing)?
                             as u32;
                         (RedeemerTag::Cert, index)
                     }
@@ -330,14 +309,7 @@ impl StagingTransaction {
                         let index = withdrawal_accounts
                             .iter()
                             .position(|account| account == reward_account)
-                            .ok_or_else(|| {
-                                eprintln!(
-                                    "missing reward redeemer target: {:?} (withdrawals={:?})",
-                                    reward_account,
-                                    withdrawal_accounts
-                                );
-                                TxBuilderError::RedeemerTargetMissing
-                            })?
+                            .ok_or(TxBuilderError::RedeemerTargetMissing)?
                             as u32;
                         (RedeemerTag::Reward, index)
                     }
@@ -357,33 +329,20 @@ impl StagingTransaction {
                         RedeemerTag::Vote => OgmiosRedeemerPurpose::Vote,
                         RedeemerTag::Propose => OgmiosRedeemerPurpose::Propose,
                     };
-                        let mut evaluation = evaluations
-                            .iter()
-                            .find(|e| e.validator.index == index as u64 && e.validator.purpose == ogmios_purpose);
-                        if evaluation.is_none() && matches!(tag, RedeemerTag::Spend) {
-                            if let RedeemerPurpose::Spend(txin) = purpose {
-                                if let Some(ordinal) = spend_ordinals.get(&(txin.hash.0, txin.index)) {
-                                    evaluation = evaluations.iter().find(|e| {
-                                        e.validator.index == *ordinal as u64
-                                            && e.validator.purpose == ogmios_purpose
-                                    });
-                                }
+                    let mut evaluation = evaluations.iter().find(|e| {
+                        e.validator.index == index as u64 && e.validator.purpose == ogmios_purpose
+                    });
+                    if evaluation.is_none() && matches!(tag, RedeemerTag::Spend) {
+                        if let RedeemerPurpose::Spend(txin) = purpose {
+                            if let Some(ordinal) = spend_ordinals.get(&(txin.hash.0, txin.index)) {
+                                evaluation = evaluations.iter().find(|e| {
+                                    e.validator.index == *ordinal as u64
+                                        && e.validator.purpose == ogmios_purpose
+                                });
                             }
                         }
-                        let evaluation = evaluation.ok_or_else(|| {
-                            let eval_pointers = evaluations
-                                .iter()
-                                .map(|e| format!("{:?}:{}", e.validator.purpose, e.validator.index))
-                                .collect::<Vec<_>>();
-                            eprintln!(
-                                "missing evaluation for redeemer tag={:?} index={} (evals={}, pointers={:?})",
-                                tag,
-                                index,
-                                evaluations.len(),
-                                eval_pointers
-                            );
-                            TxBuilderError::RedeemerTargetMissing
-                        })?;
+                    }
+                    let evaluation = evaluation.ok_or(TxBuilderError::RedeemerTargetMissing)?;
                     PallasExUnits {
                         mem: evaluation
                             .budget

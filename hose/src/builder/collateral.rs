@@ -51,8 +51,9 @@ impl TxBuilder {
             return Ok(None);
         }
 
-        // collateral_percentage is a percent (e.g., 150), so divide by 100 to get the multiplier.
-        let required_lovelace = ((fee as f64) * pparams.collateral_percentage / 100.0).ceil() as u64;
+        // note: collateral_percentage is a percent (e.g., 150), so divide by 100 to get the multiplier
+        let required_lovelace =
+            ((fee as f64) * pparams.collateral_percentage / 100.0).ceil() as u64;
 
         // TODO: support multiple collateral inputs
         let mut collateral_utxos = possible_utxos
