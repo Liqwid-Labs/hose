@@ -165,7 +165,7 @@ impl TxBuilder {
             let cost_per_step = range as f64 * base;
             for i in 0..steps {
                 min_fee += BigRational::from_integer(
-                    ((cost_per_step * multiplier.powi(i + 1)).floor() as u64).into(),
+                    ((cost_per_step * multiplier.powi(i)).floor() as u64).into(),
                 );
             }
 
@@ -174,7 +174,7 @@ impl TxBuilder {
             if partial_chunk_bytes > 0 {
                 let base_cost = partial_chunk_bytes as f64 * base;
                 min_fee += BigRational::from_integer(
-                    ((base_cost * multiplier.powi(steps + 1)).floor() as u64).into(),
+                    ((base_cost * multiplier.powi(steps)).floor() as u64).into(),
                 );
             }
         }
