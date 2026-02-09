@@ -15,30 +15,6 @@ use super::TxBuilder;
 use crate::builder::tx::StagingTransaction;
 use crate::primitives::Certificate;
 
-pub fn ref_script_fee(total_script_size: u64, range: u64, base: f64, multiplier: f64) -> u64 {
-    if total_script_size == 0 {
-        return 0;
-    }
-
-    let steps = (total_script_size / range) as i32;
-    let cost_per_step = range as f64 * base;
-    let mut fee = 0u64;
-
-    // note: first step uses multiplier^0.
-    for i in 0..steps {
-        fee = fee + (cost_per_step * multiplier.powi(i)).floor() as u64;
-    }
-
-    // the last step uses exponent equal to number of full chunks.
-    let remaining_bytes = total_script_size % range;
-    if remaining_bytes > 0 {
-        let base_cost = remaining_bytes as f64 * base;
-        fee = fee + (base_cost * multiplier.powi(steps)).floor() as u64;
-    }
-
-    fee
-}
-
 impl TxBuilder {
     /// Returns the minimum lovelace for a transaction
     pub async fn min_fee(
@@ -158,48 +134,49 @@ impl TxBuilder {
         min_fee += total_cpu * pparams.script_execution_prices.cpu.0.clone();
         min_fee += total_mem * pparams.script_execution_prices.memory.0.clone();
 
-        // Fee from reference script sizes (in tx outputs/collateral return (?) and reference inputs)
+        // Fee from reference input script sizes
         // https://github.com/IntersectMBO/cardano-ledger/blob/master/docs/adr/2024-08-14_009-refscripts-fee-change.md
-        let mut total_script_size: u64 = tx
-            .outputs
+        let inputs_and_ref_input_pointers = tx
+            .reference_inputs
             .iter()
-            .flat_map(|output| output.script.as_ref())
-            .map(|script| script.bytes.len() as u64)
-            .sum();
-        total_script_size += tx
-            .collateral_output
+            .chain(tx.inputs.iter())
+            .map(|input| TxOutputPointer::new(input.hash, input.index))
+            .collect::<Vec<_>>();
+
+        let resolved_inputs_and_ref_inputs = {
+            let indexer = indexer.lock().await;
+            indexer
+                .utxos(&inputs_and_ref_input_pointers)
+                .context("Failed to fetch reference input UTXOs")?
+        };
+
+        let total_ref_script_size = resolved_inputs_and_ref_inputs
             .iter()
-            .flat_map(|output| output.script.as_ref())
+            .flat_map(|utxo| utxo.script.as_ref())
             .map(|script| script.bytes.len() as u64)
             .sum::<u64>();
 
-        if !tx.reference_inputs.is_empty() {
-            let reference_inputs = tx
-                .reference_inputs
-                .iter()
-                .map(|input| TxOutputPointer::new(input.hash, input.index))
-                .collect::<Vec<_>>();
-
-            let reference_inputs = {
-                let indexer = indexer.lock().await;
-                indexer
-                    .utxos(&reference_inputs)
-                    .context("Failed to fetch reference input UTXOs")?
-            };
-
-            total_script_size += reference_inputs
-                .iter()
-                .flat_map(|utxo| utxo.script.as_ref())
-                .map(|script| script.bytes.len() as u64)
-                .sum::<u64>();
-        }
-
-        if total_script_size > 0 {
+        if total_ref_script_size > 0 {
+            // Full chunks
             let range = pparams.min_fee_reference_scripts.range as u64;
             let base = pparams.min_fee_reference_scripts.base;
             let multiplier = pparams.min_fee_reference_scripts.multiplier;
-            let ref_script_fee = ref_script_fee(total_script_size, range, base, multiplier);
-            min_fee += BigRational::from_integer(ref_script_fee.into());
+            let steps = (total_ref_script_size / range) as i32;
+            let cost_per_step = range as f64 * base;
+            for i in 0..steps {
+                min_fee += BigRational::from_integer(
+                    ((cost_per_step * multiplier.powi(i + 1)).floor() as u64).into(),
+                );
+            }
+
+            // Partial chunk
+            let partial_chunk_bytes = total_ref_script_size % range;
+            if partial_chunk_bytes > 0 {
+                let base_cost = partial_chunk_bytes as f64 * base;
+                min_fee += BigRational::from_integer(
+                    ((base_cost * multiplier.powi(steps + 1)).floor() as u64).into(),
+                );
+            }
         }
 
         let fee = min_fee
@@ -210,23 +187,5 @@ impl TxBuilder {
             .to_u64()
             .context("Failed to convert fee to u64")?;
         Ok((fee, evaluation))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::ref_script_fee;
-
-    #[test]
-    fn no_fee_if_no_ref_scripts() {
-        assert_eq!(ref_script_fee(0, 25_600, 15.0, 1.2), 0);
-    }
-
-    #[test]
-    fn ref_script_fee_full_plus_partial_steps() {
-        // complete steps: 25600 * 15 * 1.0 = 384_000
-        // last, partial step: 4400 * 15 * 1.2 = 79_200
-        // total: 463_200
-        assert_eq!(ref_script_fee(30_000, 25_600, 15.0, 1.2), 463_200);
     }
 }
