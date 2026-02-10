@@ -31,4 +31,10 @@ pub enum TxBuilderError {
     /// Mint/burn amount is out of range
     #[error("Invalid mint amount")]
     InvalidMintAmount,
+    /// Native scripts do not take redeemers
+    #[error("Cannot use redeemers with native scripts")]
+    RedeemerForNativeScript,
+    /// Plutus scripts need a redeemer
+    #[error("Plutus scripts must always take a redeemer")]
+    RedeemerMissing,
 }

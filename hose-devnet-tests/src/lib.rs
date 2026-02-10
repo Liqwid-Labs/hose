@@ -2,15 +2,33 @@
 mod test {
     use anyhow::Context;
     use hose::builder::TxBuilder;
-    use hose::primitives::{Asset, AssetId, Hash, Output, Script, ScriptKind};
+    use hose::primitives::{Asset, AssetId, Hash, Output, PubKeyHash, Script, ScriptKind};
     use hose_devnet::prelude::*;
-    use hose_devnet::{empty_redeemer, nonced_always_succeeds_script, validator_to_address};
+    use hose_devnet::{
+        empty_redeemer, network_from_network_id, nonced_always_succeeds_script,
+        validator_to_address,
+    };
     use hydrant::primitives::TxOutputPointer;
     use pallas::codec::minicbor;
-    use pallas::ledger::addresses::{Address, ShelleyPaymentPart};
+    use pallas::ledger::addresses::{
+        Address, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart,
+    };
+    use pallas::ledger::primitives::Fragment;
+    use pallas::ledger::primitives::alonzo::NativeScript;
+    use pallas::ledger::traverse::ComputeHash;
     use tracing::info;
 
     const MIN_ADA: u64 = 2_000_000;
+
+    fn address_to_pub_key_hash(address: Address) -> PubKeyHash {
+        match address {
+            Address::Shelley(s) => match s.payment() {
+                ShelleyPaymentPart::Key(h) => Hash::from(*h),
+                _ => panic!("expected key payment part"),
+            },
+            _ => panic!("unexpected address type"),
+        }
+    }
 
     #[hose_devnet::test]
     async fn basic_tx(context: &mut DevnetContext) -> anyhow::Result<()> {
@@ -96,7 +114,7 @@ mod test {
         context.sign_and_submit_tx(registration_tx).await?;
 
         let withdrawal_tx = TxBuilder::new(context.network_id, context.wallet.address())
-            .withdraw_from_script(script.hash, script.kind, 0, empty_redeemer())
+            .withdraw_from_script(script.hash, script.kind, 0, Some(empty_redeemer()))?
             .add_script(script.kind, script.bytes.clone())
             .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
@@ -458,13 +476,7 @@ mod test {
 
     #[hose_devnet::test]
     async fn delegate_to_unknown_pool(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let pub_key_hash = match context.wallet.address() {
-            Address::Shelley(s) => match s.payment() {
-                ShelleyPaymentPart::Key(h) => Hash::from(*h),
-                _ => panic!("expected key payment part"),
-            },
-            _ => panic!("unexpected address type"),
-        };
+        let pub_key_hash = address_to_pub_key_hash(context.wallet.address());
 
         // 1. Register Stake Key
         let registration_tx = TxBuilder::new(context.network_id, context.wallet.address())
@@ -506,13 +518,7 @@ mod test {
 
     #[hose_devnet::test]
     async fn delegate_to_known_pool(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let pub_key_hash = match context.wallet.address() {
-            Address::Shelley(s) => match s.payment() {
-                ShelleyPaymentPart::Key(h) => Hash::from(*h),
-                _ => panic!("expected key payment part"),
-            },
-            _ => panic!("unexpected address type"),
-        };
+        let pub_key_hash = address_to_pub_key_hash(context.wallet.address());
 
         // 1. Register Stake Key
         let registration_tx = TxBuilder::new(context.network_id, context.wallet.address())
@@ -595,13 +601,7 @@ mod test {
 
     #[hose_devnet::test]
     async fn register_and_deregister_stake_key(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let pub_key_hash = match context.wallet.address() {
-            Address::Shelley(s) => match s.payment() {
-                ShelleyPaymentPart::Key(h) => Hash::from(*h),
-                _ => panic!("expected key payment part"),
-            },
-            _ => panic!("unexpected address type"),
-        };
+        let pub_key_hash = address_to_pub_key_hash(context.wallet.address());
 
         // 1. Register Stake Key
         let registration_tx = TxBuilder::new(context.network_id, context.wallet.address())
@@ -627,6 +627,77 @@ mod test {
             .await?;
 
         context.sign_and_submit_tx(deregistration_tx).await?;
+
+        Ok(())
+    }
+
+    #[hose_devnet::test]
+    async fn spend_from_native_script(context: &mut DevnetContext) -> anyhow::Result<()> {
+        let script =
+            NativeScript::ScriptPubkey(address_to_pub_key_hash(context.wallet.address()).into());
+        let script_address = Address::Shelley(ShelleyAddress::new(
+            network_from_network_id(context.network_id),
+            ShelleyPaymentPart::Script(script.compute_hash().into()),
+            ShelleyDelegationPart::Null,
+        ));
+        let script_bytes = script
+            .encode_fragment()
+            .expect("failed to encode native script as cbor");
+
+        let pay_to_script_tx = TxBuilder::new(context.network_id, context.wallet.address().clone())
+            .add_output(Output::new(script_address, MIN_ADA))
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+        let (signed, _res) = context.sign_and_submit_tx(pay_to_script_tx).await?;
+        let script_output_pointer =
+            hydrant::primitives::TxOutputPointer::new(signed.hash()?.into(), 0);
+        hose_devnet::wait_until_utxo_exists(context, script_output_pointer.clone()).await?;
+
+        let spend_from_script_tx =
+            TxBuilder::new(context.network_id, context.wallet.address().clone())
+                .add_input(script_output_pointer.into())
+                .add_script(ScriptKind::Native, script_bytes)
+                .build(&context.indexer, &context.ogmios, &context.protocol_params)
+                .await?;
+
+        context.sign_and_submit_tx(spend_from_script_tx).await?;
+
+        Ok(())
+    }
+
+    #[hose_devnet::test]
+    async fn withdraw_from_native_script(context: &mut DevnetContext) -> anyhow::Result<()> {
+        let script =
+            NativeScript::ScriptPubkey(address_to_pub_key_hash(context.wallet.address()).into());
+        let script_bytes = script
+            .encode_fragment()
+            .expect("failed to encode native script as cbor");
+
+        let registration_tx = TxBuilder::new(context.network_id, context.wallet.address().into())
+            .register_script_stake(script.compute_hash().into(), ScriptKind::Native, None)
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+
+        match context.sign_and_submit_tx(registration_tx).await {
+            Ok((signed, _res)) => {
+                hose_devnet::wait_until_tx_is_included(context, signed.hash()?.into()).await?;
+            }
+            Err(e) => {
+                let err_msg = e.to_string();
+                info!(
+                    "Register stake tx failed (assuming already registered), continuing: {}",
+                    err_msg
+                );
+            }
+        }
+
+        let withdrawal_tx = TxBuilder::new(context.network_id, context.wallet.address().into())
+            .withdraw_from_script(script.compute_hash().into(), ScriptKind::Native, 0, None)?
+            .add_script(ScriptKind::Native, script_bytes)
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+
+        context.sign_and_submit_tx(withdrawal_tx).await?;
 
         Ok(())
     }
