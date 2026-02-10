@@ -198,3 +198,62 @@ impl BuiltTx {
         Ok(self.tx.hash.0.into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use pallas::ledger::addresses::{
+        Address as PallasAddress, Network, ShelleyAddress, ShelleyDelegationPart,
+        ShelleyPaymentPart,
+    };
+    use pallas::ledger::primitives::NetworkId;
+
+    use super::TxBuilder;
+    use crate::primitives::{Asset, Hash, RedeemerPurpose, ScriptKind};
+
+    fn dummy_address() -> PallasAddress {
+        let payment_hash = Hash([1u8; 28]);
+        PallasAddress::Shelley(ShelleyAddress::new(
+            Network::Testnet,
+            ShelleyPaymentPart::Key(payment_hash.into()),
+            ShelleyDelegationPart::Null,
+        ))
+    }
+
+    fn has_mint_redeemer(builder: &TxBuilder, policy: Hash<28>) -> bool {
+        builder
+            .body
+            .redeemers
+            .as_ref()
+            .map(|redeemers| redeemers.contains_key(&RedeemerPurpose::Mint(policy)))
+            .unwrap_or(false)
+    }
+
+    #[test]
+    fn mint_then_burn_same_asset_removes_redeemer() {
+        let policy = Hash([4u8; 28]);
+        let builder = TxBuilder::new(NetworkId::Testnet, dummy_address())
+            .mint_asset(
+                Asset {
+                    policy,
+                    name: b"NETZERO".to_vec(),
+                    quantity: 5,
+                },
+                ScriptKind::PlutusV3,
+                vec![0u8],
+            )
+            .expect("mint")
+            .burn_asset(
+                Asset {
+                    policy,
+                    name: b"NETZERO".to_vec(),
+                    quantity: 5,
+                },
+                ScriptKind::PlutusV3,
+                vec![1u8],
+            )
+            .expect("burn");
+
+        assert!(builder.body.mint.is_empty());
+        assert!(!has_mint_redeemer(&builder, policy));
+    }
+}

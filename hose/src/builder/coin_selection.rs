@@ -62,6 +62,7 @@ impl TxBuilder {
             }
 
             required_assets = required_assets - utxo.assets.clone().into();
+            required_lovelace = required_lovelace.saturating_sub(utxo.lovelace);
             selected_utxos.push(utxo.clone());
         }
 

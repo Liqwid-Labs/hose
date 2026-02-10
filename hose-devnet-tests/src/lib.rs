@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod test {
-    use anyhow::Context;
+    use anyhow::{Context, ensure};
     use hose::builder::TxBuilder;
-    use hose::primitives::{Asset, AssetId, Hash, Output, PubKeyHash, Script, ScriptKind};
+    use hose::primitives::{Asset, AssetId, Hash, Output, PubKeyHash, RedeemerPurpose, Script, ScriptKind};
     use hose_devnet::prelude::*;
     use hose_devnet::{
         empty_redeemer, network_from_network_id, nonced_always_succeeds_script,
@@ -250,6 +250,51 @@ mod test {
             .await?;
 
         context.sign_and_submit_tx(mint_tx).await?;
+
+        Ok(())
+    }
+
+    #[hose_devnet::test]
+    async fn mint_and_burn_same_asset_is_noop(context: &mut DevnetContext) -> anyhow::Result<()> {
+        let policy_script = nonced_always_succeeds_script()?;
+        let policy = policy_script.hash;
+        let asset_name = b"NETZERO".to_vec();
+
+        let built = TxBuilder::new(context.network_id, context.wallet.address())
+            .mint_asset(
+                Asset {
+                    policy,
+                    name: asset_name.clone(),
+                    quantity: 5,
+                },
+                policy_script.kind,
+                empty_redeemer(),
+            )?
+            .burn_asset(
+                Asset {
+                    policy,
+                    name: asset_name,
+                    quantity: 5,
+                },
+                policy_script.kind,
+                empty_redeemer(),
+            )?
+            .add_output(Output::new(context.wallet.address(), MIN_ADA))
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+
+        ensure!(
+            built.body().mint.is_empty(),
+            "expected zero mint entries for net-zero mint"
+        );
+        if let Some(redeemers) = built.body().redeemers.as_ref() {
+            ensure!(
+                !redeemers.contains_key(&RedeemerPurpose::Mint(policy)),
+                "expected no mint redeemer for net-zero mint"
+            );
+        }
+
+        context.sign_and_submit_tx(built).await?;
 
         Ok(())
     }

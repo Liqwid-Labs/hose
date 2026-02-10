@@ -1,7 +1,8 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Deref as _;
 
 use num::ToPrimitive as _;
+use ogmios_client::codec::RedeemerPurpose as OgmiosRedeemerPurpose;
 use ogmios_client::method::evaluate::Evaluation;
 use pallas::codec::utils::Bytes;
 use pallas::crypto::hash::Hash as PallasHash;
@@ -260,59 +261,33 @@ impl StagingTransaction {
         let mut redeemers = vec![];
 
         if let Some(rdmrs) = self.redeemers {
-            for (index, (purpose, (pd, ex_units))) in rdmrs.deref().iter().enumerate() {
-                let ex_units = if let Some(ExUnits { mem, steps }) = ex_units {
-                    PallasExUnits {
-                        mem: *mem,
-                        steps: *steps,
-                    }
-                } else {
-                    if let Some(ref evaluations) = evaluations {
-                        let evaluation = evaluations
-                            .iter()
-                            .find(|e| e.validator.index == index as u64)
-                            .ok_or(TxBuilderError::RedeemerTargetMissing)?;
-                        PallasExUnits {
-                            mem: evaluation
-                                .budget
-                                .memory
-                                .0
-                                .clone()
-                                .to_integer()
-                                .to_u64()
-                                .unwrap(),
-                            steps: evaluation
-                                .budget
-                                .cpu
-                                .0
-                                .clone()
-                                .to_integer()
-                                .to_u64()
-                                .unwrap(),
-                        }
-                    } else {
-                        // FIXME: We shouldn't just assume 0 for the budget, but it will get recalculated later
-                        PallasExUnits { mem: 0, steps: 0 }
-                    }
-                };
-
-                let data = PlutusData::decode_fragment(pd.as_ref())
-                    .map_err(|_| TxBuilderError::MalformedDatum)?;
-
-                match purpose {
+            // Align redeemer indices with the ledger order (purpose + index, with spend ordinals),
+            // not simply the HashMap iteration order.
+            let spend_keys: HashSet<([u8; 32], u64)> = rdmrs
+                .keys()
+                .filter_map(|purpose| match purpose {
+                    RedeemerPurpose::Spend(txin) => Some((txin.hash.0, txin.index)),
+                    _ => None,
+                })
+                .collect();
+            let mut spend_ordinals: HashMap<([u8; 32], u64), u32> = HashMap::new();
+            let mut ordinal = 0u32;
+            for input in &inputs {
+                let key = (*input.transaction_id, input.index);
+                if spend_keys.contains(&key) {
+                    spend_ordinals.insert(key, ordinal);
+                    ordinal += 1;
+                }
+            }
+            for (purpose, (pd, ex_units)) in rdmrs.deref().iter() {
+                let (tag, index) = match purpose {
                     RedeemerPurpose::Spend(txin) => {
                         let index = inputs
                             .iter()
                             .position(|x| (*x.transaction_id, x.index) == (txin.hash.0, txin.index))
                             .ok_or(TxBuilderError::RedeemerTargetMissing)?
                             as u32;
-
-                        redeemers.push(Redeemer {
-                            tag: RedeemerTag::Spend,
-                            index,
-                            data,
-                            ex_units,
-                        })
+                        (RedeemerTag::Spend, index)
                     }
                     RedeemerPurpose::Mint(pid) => {
                         let index = mint_policies
@@ -320,13 +295,7 @@ impl StagingTransaction {
                             .position(|x| x.as_slice() == pid.0)
                             .ok_or(TxBuilderError::RedeemerTargetMissing)?
                             as u32;
-
-                        redeemers.push(Redeemer {
-                            tag: RedeemerTag::Mint,
-                            index,
-                            data,
-                            ex_units,
-                        })
+                        (RedeemerTag::Mint, index)
                     }
                     RedeemerPurpose::Cert(script_hash) => {
                         let index = certificate_script_hashes
@@ -334,13 +303,7 @@ impl StagingTransaction {
                             .position(|hash| hash == script_hash)
                             .ok_or(TxBuilderError::RedeemerTargetMissing)?
                             as u32;
-
-                        redeemers.push(Redeemer {
-                            tag: RedeemerTag::Cert,
-                            index,
-                            data,
-                            ex_units,
-                        })
+                        (RedeemerTag::Cert, index)
                     }
                     RedeemerPurpose::Reward(reward_account) => {
                         let index = withdrawal_accounts
@@ -348,15 +311,70 @@ impl StagingTransaction {
                             .position(|account| account == reward_account)
                             .ok_or(TxBuilderError::RedeemerTargetMissing)?
                             as u32;
-
-                        redeemers.push(Redeemer {
-                            tag: RedeemerTag::Reward,
-                            index,
-                            data,
-                            ex_units,
-                        })
+                        (RedeemerTag::Reward, index)
                     }
-                }
+                };
+
+                let ex_units = if let Some(ExUnits { mem, steps }) = ex_units {
+                    PallasExUnits {
+                        mem: *mem,
+                        steps: *steps,
+                    }
+                } else if let Some(ref evaluations) = evaluations {
+                    let ogmios_purpose = match tag {
+                        RedeemerTag::Spend => OgmiosRedeemerPurpose::Spend,
+                        RedeemerTag::Mint => OgmiosRedeemerPurpose::Mint,
+                        RedeemerTag::Cert => OgmiosRedeemerPurpose::Publish,
+                        RedeemerTag::Reward => OgmiosRedeemerPurpose::Withdraw,
+                        RedeemerTag::Vote => OgmiosRedeemerPurpose::Vote,
+                        RedeemerTag::Propose => OgmiosRedeemerPurpose::Propose,
+                    };
+                    let mut evaluation = evaluations.iter().find(|e| {
+                        e.validator.index == index as u64 && e.validator.purpose == ogmios_purpose
+                    });
+                    if evaluation.is_none() && matches!(tag, RedeemerTag::Spend) {
+                        if let RedeemerPurpose::Spend(txin) = purpose {
+                            if let Some(ordinal) = spend_ordinals.get(&(txin.hash.0, txin.index)) {
+                                evaluation = evaluations.iter().find(|e| {
+                                    e.validator.index == *ordinal as u64
+                                        && e.validator.purpose == ogmios_purpose
+                                });
+                            }
+                        }
+                    }
+                    let evaluation = evaluation.ok_or(TxBuilderError::RedeemerTargetMissing)?;
+                    PallasExUnits {
+                        mem: evaluation
+                            .budget
+                            .memory
+                            .0
+                            .clone()
+                            .to_integer()
+                            .to_u64()
+                            .unwrap(),
+                        steps: evaluation
+                            .budget
+                            .cpu
+                            .0
+                            .clone()
+                            .to_integer()
+                            .to_u64()
+                            .unwrap(),
+                    }
+                } else {
+                    // FIXME: We shouldn't just assume 0 for the budget, but it will get recalculated later
+                    PallasExUnits { mem: 0, steps: 0 }
+                };
+
+                let data = PlutusData::decode_fragment(pd.as_ref())
+                    .map_err(|_| TxBuilderError::MalformedDatum)?;
+
+                redeemers.push(Redeemer {
+                    tag,
+                    index,
+                    data,
+                    ex_units,
+                })
             }
         };
 
@@ -374,15 +392,19 @@ impl StagingTransaction {
         // Construct dummy witnesses if requested
         let witness_set_vkeys = None;
 
-        let script_data_hash = self.language_view.map(|language_view| {
-            let dta = pallas::ledger::primitives::conway::ScriptData {
-                redeemers: Some(witness_set_redeemers.clone()),
-                datums: witness_set_datums.clone(),
-                language_view: Some(language_view),
-            };
+        let script_data_hash = if !redeemers.is_empty() || witness_set_datums.is_some() {
+            self.language_view.map(|language_view| {
+                let dta = pallas::ledger::primitives::conway::ScriptData {
+                    redeemers: Some(witness_set_redeemers.clone()),
+                    datums: witness_set_datums.clone(),
+                    language_view: Some(language_view),
+                };
 
-            dta.hash()
-        });
+                dta.hash()
+            })
+        } else {
+            None
+        };
 
         let mut pallas_tx: Tx = Tx {
             transaction_body: TransactionBody {
