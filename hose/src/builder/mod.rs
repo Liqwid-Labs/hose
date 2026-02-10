@@ -83,8 +83,8 @@ impl TxBuilder {
             // Recalculate fee with the change output and collateral input included
             let finalized_body = {
                 let mut body = self.body.clone();
-                if let Some(collateral_input) = self
-                    .collateral_input(indexer, &address_utxos, pparams, fee)
+                for collateral_input in self
+                    .collateral_inputs(indexer, &address_utxos, pparams, fee)
                     .await?
                 {
                     body = body.collateral_input(collateral_input);
