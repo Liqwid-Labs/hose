@@ -103,7 +103,7 @@ impl StagingTransaction {
             self.reference_inputs
                 .iter()
                 .map(|x| TransactionInput {
-                    transaction_id: x.hash.0.into(),
+                    transaction_id: x.hash.into(),
                     index: x.index,
                 })
                 .collect(),
@@ -112,7 +112,10 @@ impl StagingTransaction {
         let (mut native_script, mut plutus_v1_script, mut plutus_v2_script, mut plutus_v3_script) =
             (vec![], vec![], vec![], vec![]);
 
-        for (_, script) in self.scripts {
+        let mut sorted_scripts: Vec<_> = self.scripts.into_values().collect();
+        sorted_scripts.sort();
+
+        for script in sorted_scripts {
             match script.kind {
                 ScriptKind::Native => {
                     let script = NativeScript::decode_fragment(&script.bytes)
@@ -138,9 +141,11 @@ impl StagingTransaction {
             }
         }
 
-        let plutus_data = self
-            .datums
-            .values()
+        let mut sorted_datums: Vec<_> = self.datums.into_values().collect();
+        sorted_datums.sort();
+
+        let plutus_data = sorted_datums
+            .into_iter()
             .map(|datum| {
                 PlutusData::decode_fragment(&datum.bytes)
                     .map_err(|_| TxBuilderError::MalformedDatum)
@@ -152,8 +157,7 @@ impl StagingTransaction {
             .flat_map(|x: &Multiasset<NonZeroInt>| x.iter())
             .map(|(p, _)| *p)
             .collect::<Vec<_>>();
-
-        mint_policies.sort_unstable_by_key(|x| *x);
+        mint_policies.sort();
 
         let certificates = NonEmptySet::from_vec(
             self.certificates
@@ -376,6 +380,8 @@ impl StagingTransaction {
                     ex_units,
                 })
             }
+
+            redeemers.sort_by_key(|r| (r.tag, r.index));
         };
 
         let witness_set_redeemers =

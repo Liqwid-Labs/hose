@@ -322,3 +322,66 @@ fn build_includes_legacy_script_registration_certificate() {
         PallasCertificate::StakeRegistration(_)
     ));
 }
+
+#[test]
+fn test_witness_set_determinism() {
+    use crate::primitives::{Input, ScriptKind};
+
+    fn local_dummy_output() -> Output {
+        let payment_hash = Hash([1u8; 28]);
+        let address = PallasAddress::Shelley(ShelleyAddress::new(
+            Network::Testnet,
+            ShelleyPaymentPart::Key(payment_hash.into()),
+            ShelleyDelegationPart::Null,
+        ));
+        Output::new(address, 1000000)
+    }
+
+    let input1 = Input {
+        hash: Hash([11u8; 32]),
+        index: 0,
+    };
+    let input2 = Input {
+        hash: Hash([22u8; 32]),
+        index: 0,
+    };
+
+    let mut hashes = std::collections::HashSet::new();
+    let mut cbors = std::collections::HashSet::new();
+
+    for _ in 0..100 {
+        let tx = StagingTransaction::new()
+            .network_id(0)
+            .fee(1000)
+            .input(input1.clone())
+            .input(input2.clone())
+            .output(local_dummy_output())
+            // Multiple Redeemers
+            .add_spend_redeemer(input1.clone(), vec![1u8], None)
+            .add_spend_redeemer(input2.clone(), vec![2u8], None)
+            // Multiple Datums
+            .datum(vec![1, 2, 3])
+            .datum(vec![4, 5, 6])
+            // Multiple Scripts
+            .script(ScriptKind::PlutusV2, vec![0, 1, 2])
+            .script(ScriptKind::PlutusV2, vec![3, 4, 5])
+            .language_view(ScriptKind::PlutusV2, vec![1, 2, 3]);
+
+        let built = tx.build_conway(None).expect("build failed");
+        hashes.insert(built.hash);
+        cbors.insert(built.bytes);
+    }
+
+    assert_eq!(
+        hashes.len(),
+        1,
+        "Transaction hash is not deterministic! Found {} different hashes",
+        hashes.len()
+    );
+    assert_eq!(
+        cbors.len(),
+        1,
+        "Transaction CBOR is not deterministic! Found {} different binaries",
+        cbors.len()
+    );
+}
