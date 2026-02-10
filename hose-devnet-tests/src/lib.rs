@@ -677,6 +677,48 @@ mod test {
     }
 
     #[hose_devnet::test]
+    async fn collateral_input_integration(context: &mut DevnetContext) -> anyhow::Result<()> {
+        let script = nonced_always_succeeds_script()?;
+        let script_address = validator_to_address(context, &script);
+
+        // 1. Send funds to script address
+        let setup_tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .add_output(Output::new(script_address.clone(), 5_000_000))
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+        let (signed_setup, _) = context.sign_and_submit_tx(setup_tx).await?;
+
+        let output_idx = signed_setup
+            .body()
+            .outputs
+            .iter()
+            .position(|output| output.address == script_address)
+            .context("script output not found")?;
+        let script_input: TxOutputPointer =
+            TxOutputPointer::new(signed_setup.hash()?.0.into(), output_idx as u64);
+
+        hose_devnet::wait_until_utxo_exists(context, script_input.clone()).await?;
+
+        // 2. Spend from script (must include collateral)
+        let spend_tx = TxBuilder::new(context.network_id, context.wallet.address())
+            .add_script_input(script_input.into(), empty_redeemer(), script.kind)
+            .add_script(script.kind, script.bytes)
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
+            .await?;
+
+        let collateral_inputs = &spend_tx.body().collateral_inputs;
+
+        anyhow::ensure!(
+            !collateral_inputs.is_empty(),
+            "expected at least 1 collateral input"
+        );
+
+        context.sign_and_submit_tx(spend_tx).await?;
+
+        Ok(())
+    }
+
+    #[hose_devnet::test]
     async fn spend_from_native_script(context: &mut DevnetContext) -> anyhow::Result<()> {
         let script =
             NativeScript::ScriptPubkey(address_to_pub_key_hash(context.wallet.address()).into());
