@@ -221,10 +221,10 @@ impl TxBuilder {
         match (script_kind, &redeemer) {
             (ScriptKind::Native, Some(_)) => {
                 return Err(TxBuilderError::RedemerForNativeScript);
-            },
+            }
             (other, None) if !matches!(other, ScriptKind::Native) => {
                 return Err(TxBuilderError::RedeemerMissing);
-            },
+            }
             _ => {}
         }
 

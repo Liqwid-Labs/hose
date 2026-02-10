@@ -3,11 +3,16 @@ mod test {
     use anyhow::Context;
     use hose::builder::TxBuilder;
     use hose::primitives::{Asset, AssetId, Hash, Output, PubKeyHash, Script, ScriptKind};
-    use hose_devnet::{network_from_network_id, prelude::*};
-    use hose_devnet::{empty_redeemer, nonced_always_succeeds_script, validator_to_address};
+    use hose_devnet::prelude::*;
+    use hose_devnet::{
+        empty_redeemer, network_from_network_id, nonced_always_succeeds_script,
+        validator_to_address,
+    };
     use hydrant::primitives::TxOutputPointer;
     use pallas::codec::minicbor;
-    use pallas::ledger::addresses::{Address, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart};
+    use pallas::ledger::addresses::{
+        Address, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart,
+    };
     use pallas::ledger::primitives::Fragment;
     use pallas::ledger::primitives::alonzo::NativeScript;
     use pallas::ledger::traverse::ComputeHash;
@@ -628,35 +633,32 @@ mod test {
 
     #[hose_devnet::test]
     async fn spend_from_native_script(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let script = NativeScript::ScriptPubkey(address_to_pub_key_hash(context.wallet.address()).into());
+        let script =
+            NativeScript::ScriptPubkey(address_to_pub_key_hash(context.wallet.address()).into());
         let script_address = Address::Shelley(ShelleyAddress::new(
-                network_from_network_id(context.network_id),
-                ShelleyPaymentPart::Script(script.compute_hash().into()),
-                ShelleyDelegationPart::Null,
+            network_from_network_id(context.network_id),
+            ShelleyPaymentPart::Script(script.compute_hash().into()),
+            ShelleyDelegationPart::Null,
         ));
-        let script_bytes = script.encode_fragment().expect("failed to encode native script as cbor");
+        let script_bytes = script
+            .encode_fragment()
+            .expect("failed to encode native script as cbor");
 
         let pay_to_script_tx = TxBuilder::new(context.network_id, context.wallet.address().clone())
             .add_output(Output::new(script_address, MIN_ADA))
-            .build(
-                &context.indexer,
-                &context.ogmios,
-                &context.protocol_params,
-            )
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
         let (signed, _res) = context.sign_and_submit_tx(pay_to_script_tx).await?;
-        let script_output_pointer = hydrant::primitives::TxOutputPointer::new(signed.hash()?.into(), 0);
+        let script_output_pointer =
+            hydrant::primitives::TxOutputPointer::new(signed.hash()?.into(), 0);
         hose_devnet::wait_until_utxo_exists(context, script_output_pointer.clone()).await?;
 
-        let spend_from_script_tx = TxBuilder::new(context.network_id, context.wallet.address().clone())
-            .add_input(script_output_pointer.into())
-            .add_script(ScriptKind::Native, script_bytes)
-            .build(
-                &context.indexer,
-                &context.ogmios,
-                &context.protocol_params,
-            )
-            .await?;
+        let spend_from_script_tx =
+            TxBuilder::new(context.network_id, context.wallet.address().clone())
+                .add_input(script_output_pointer.into())
+                .add_script(ScriptKind::Native, script_bytes)
+                .build(&context.indexer, &context.ogmios, &context.protocol_params)
+                .await?;
 
         context.sign_and_submit_tx(spend_from_script_tx).await?;
 
@@ -665,16 +667,15 @@ mod test {
 
     #[hose_devnet::test]
     async fn withdraw_from_native_script(context: &mut DevnetContext) -> anyhow::Result<()> {
-        let script = NativeScript::ScriptPubkey(address_to_pub_key_hash(context.wallet.address()).into());
-        let script_bytes = script.encode_fragment().expect("failed to encode native script as cbor");
+        let script =
+            NativeScript::ScriptPubkey(address_to_pub_key_hash(context.wallet.address()).into());
+        let script_bytes = script
+            .encode_fragment()
+            .expect("failed to encode native script as cbor");
 
         let registration_tx = TxBuilder::new(context.network_id, context.wallet.address().into())
             .register_script_stake(script.compute_hash().into(), ScriptKind::Native, None)
-            .build(
-                &context.indexer,
-                &context.ogmios,
-                &context.protocol_params,
-            )
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
         match context.sign_and_submit_tx(registration_tx).await {
@@ -693,11 +694,7 @@ mod test {
         let withdrawal_tx = TxBuilder::new(context.network_id, context.wallet.address().into())
             .withdraw_from_script(script.compute_hash().into(), ScriptKind::Native, 0, None)?
             .add_script(ScriptKind::Native, script_bytes)
-            .build(
-                &context.indexer,
-                &context.ogmios,
-                &context.protocol_params,
-            )
+            .build(&context.indexer, &context.ogmios, &context.protocol_params)
             .await?;
 
         context.sign_and_submit_tx(withdrawal_tx).await?;
