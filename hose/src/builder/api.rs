@@ -211,6 +211,7 @@ impl TxBuilder {
         script_hash: Hash<28>,
         script_kind: ScriptKind,
         amount: u64,
+        // NOTE: Native scripts cannot take redeemers, while Plutus scripts must have one.
         redeemer: Option<Vec<u8>>,
     ) -> Result<Self, TxBuilderError> {
         let network_id = self.body.network_id.unwrap_or(0);
@@ -220,7 +221,7 @@ impl TxBuilder {
 
         match (script_kind, &redeemer) {
             (ScriptKind::Native, Some(_)) => {
-                return Err(TxBuilderError::RedemerForNativeScript);
+                return Err(TxBuilderError::RedeemerForNativeScript);
             }
             (other, None) if !matches!(other, ScriptKind::Native) => {
                 return Err(TxBuilderError::RedeemerMissing);

@@ -33,7 +33,7 @@ pub enum TxBuilderError {
     InvalidMintAmount,
     /// Native scripts do not take redeemers
     #[error("Cannot use redeemers with native scripts")]
-    RedemerForNativeScript,
+    RedeemerForNativeScript,
     /// Plutus scripts need a redeemer
     #[error("Plutus scripts must always take a redeemer")]
     RedeemerMissing,
