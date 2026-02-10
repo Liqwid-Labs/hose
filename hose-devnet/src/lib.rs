@@ -59,6 +59,7 @@ pub async fn wait_until_tx_is_included(
     Ok(())
 }
 
+#[inline(always)]
 pub fn empty_redeemer() -> Vec<u8> {
     hex::decode("00").unwrap()
 }

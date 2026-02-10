@@ -237,17 +237,31 @@ impl TxBuilder {
         script_hash: Hash<28>,
         script_kind: ScriptKind,
         amount: u64,
-        redeemer: Vec<u8>,
-    ) -> Self {
+        // NOTE: Native scripts cannot take redeemers, while Plutus scripts must have one.
+        redeemer: Option<Vec<u8>>,
+    ) -> Result<Self, TxBuilderError> {
         let network_id = self.body.network_id.unwrap_or(0);
         let reward_account =
             RewardAccount::from_script_hash_with_network_id(network_id, script_hash);
         self.body = self.body.withdrawal(reward_account.clone(), amount);
-        self.body = self
-            .body
-            .add_reward_redeemer(reward_account, redeemer, None);
+
+        match (script_kind, &redeemer) {
+            (ScriptKind::Native, Some(_)) => {
+                return Err(TxBuilderError::RedeemerForNativeScript);
+            }
+            (other, None) if !matches!(other, ScriptKind::Native) => {
+                return Err(TxBuilderError::RedeemerMissing);
+            }
+            _ => {}
+        }
+
+        if let Some(redeemer) = redeemer {
+            self.body = self
+                .body
+                .add_reward_redeemer(reward_account, redeemer, None);
+        }
         self.script_kinds.insert(script_kind);
-        self
+        Ok(self)
     }
     /// Add a read-only input to the transaction which won't be consumed, but can be inspected by
     /// scripts. Perfect for oracles, shared state, etc.
