@@ -106,14 +106,44 @@ impl Output {
 
     /// Minimum amount of lovelace required for the UTxO to be considered valid
     pub fn min_deposit(&self, pparams: &ProtocolParams) -> Result<u64, TxBuilderError> {
-        // the constant overhead of 160 bytes accounts for the transaction input and
-        // the entry in the UTxO map data structure (20 words * 8 bytes)
-        // https://cips.cardano.org/cip/CIP-55#the-new-minimum-lovelace-calculation
-        // FIXME: we should not need this buffer, but some devnet tests fail without it.
-        const MIN_UTXO_SIZE_BUFFER: u64 = 4;
-        Ok(pparams.min_utxo_deposit_constant.lovelace
-            + pparams.min_utxo_deposit_coefficient
-                * (self.size()? as u64 + 160 + MIN_UTXO_SIZE_BUFFER))
+        // See `babbageMinUTxOValue`:
+        //   https://github.com/IntersectMBO/cardano-ledger/blob/6ef1bf9fa1ca589e706e781fa8c9b4ad8df1e919/eras/babbage/impl/src/Cardano/Ledger/Babbage/TxOut.hs#L655-L673
+        //
+        // NOTE: the minimum amount of lovelace required in an output depends on the size of the
+        // serialized output, but that in turn depends on the amount of lovelace in the utxo, since
+        // the cbor-serialized size of different u64 values will take a variable number of bytes.
+        // For instance, an output initially with 0 lovelace (which occupies only 1 byte) will
+        // require a certain amount of lovelace to be added, say ~1M lovelace. But, adding that
+        // quantity to the output will result in a different minimum required amount, since ~1M
+        // occupies more than 1 byte (5 bytes in fact, 1 byte of additional info + a 4 byte
+        // argument, per the RFC), so we need to add some more lovelace, and so on. Therefore, we
+        // need to set the minimum amount of lovelace in a loop.
+        //
+        // We compute at each step the total amount of lovelace that needs to be added to the
+        // output to reach the minimum deposit parameter. This value is non-decreasing, since
+        // lovelace is added at each iteration and the cbor-encoded amount size never decreases.
+        // Since the lovelace amount is the only thing that changes and the cbor-encoding uses
+        // finitely many "steps" when increasing the field witdth, we're guaranteed to reach a
+        // fixed-point in a finite (and small) number of iterations.
+        //
+        // See also `setMinCoinTxOutWith` in the ledger repo, which also converges by repeatedly
+        // setting coinTxOutL to getMinCoinTxOut until stable:
+        //   https://github.com/IntersectMBO/cardano-ledger/blob/6ef1bf9fa1ca589e706e781fa8c9b4ad8df1e919/libs/cardano-ledger-core/src/Cardano/Ledger/Tools.hs#L282-L300
+
+        let mut sized_output = self.clone();
+        let mut previous_required_lovelace = 0_u64;
+        loop {
+            let next_required_lovelace = pparams.min_utxo_deposit_constant.lovelace
+                + pparams.min_utxo_deposit_coefficient * (sized_output.size()? as u64 + 160);
+
+            if next_required_lovelace == previous_required_lovelace {
+                return Ok(next_required_lovelace);
+            }
+
+            previous_required_lovelace = next_required_lovelace;
+            // Recompute using the lovelace amount that will actually be set in the output.
+            sized_output.lovelace = sized_output.lovelace.max(next_required_lovelace);
+        }
     }
 
     pub fn build_babbage(&self) -> Result<TransactionOutput<'_>, TxBuilderError> {
