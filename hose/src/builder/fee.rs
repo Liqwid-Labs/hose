@@ -137,17 +137,17 @@ impl TxBuilder {
         // Fee from reference input script sizes
         // https://github.com/IntersectMBO/cardano-ledger/blob/master/docs/adr/2024-08-14_009-refscripts-fee-change.md
         let inputs_and_ref_input_pointers = tx
-            .reference_inputs
+            .inputs
             .iter()
-            .chain(tx.inputs.iter())
+            .chain(tx.reference_inputs.iter())
             .map(|input| TxOutputPointer::new(input.hash, input.index))
             .collect::<Vec<_>>();
 
         let resolved_inputs_and_ref_inputs = {
             let indexer = indexer.lock().await;
-            indexer
-                .utxos(&inputs_and_ref_input_pointers)
-                .context("Failed to fetch reference input UTXOs")?
+            indexer.utxos(&inputs_and_ref_input_pointers).context(
+                "Failed to fetch inputs or reference inputs for reference script fee calculation",
+            )?
         };
 
         let total_ref_script_size = resolved_inputs_and_ref_inputs

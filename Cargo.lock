@@ -1132,7 +1132,7 @@ checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
 [[package]]
 name = "hydrant"
 version = "0.1.0"
-source = "git+https://github.com/liqwid-labs/hydrant#c16a7f02383f81d3f90b57aae8c60391e3212a43"
+source = "git+https://github.com/liqwid-labs/hydrant#379898e8ff540fe808c8453310a71050e13d1c0d"
 dependencies = [
  "anyhow",
  "futures",
@@ -1757,7 +1757,7 @@ dependencies = [
 [[package]]
 name = "ogmios-client"
 version = "0.1.0"
-source = "git+https://github.com/liqwid-labs/ogmios-client-rs#5edb225be7c05f486b93f981a664a2850b85ca63"
+source = "git+https://github.com/liqwid-labs/ogmios-client-rs#fd93360cbd39bf7ea258ef525912e19f672bc1df"
 dependencies = [
  "anyhow",
  "futures-util",
