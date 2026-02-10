@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use hydrant::primitives::AssetId;
+use hydrant::primitives::{AssetDelta, AssetId};
 use pallas::codec::minicbor;
 use pallas::ledger::primitives::conway::AuxiliaryData;
 
@@ -95,10 +95,7 @@ impl StagingTransaction {
         }
 
         self.mint
-            .entry(AssetId::new(policy, name.clone()))
-            .and_modify(|asset_amount| *asset_amount += amount)
-            .or_insert(amount);
-
+            .add_asset(AssetDelta::new(policy, name.clone(), amount));
         Ok(self)
     }
 

@@ -12,7 +12,6 @@ use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::conway::LanguageView;
 use tokio::sync::Mutex;
 
-use crate::builder::tx::TxBuilderError;
 use crate::primitives::{DatumOption, Output, ScriptKind, TxHash};
 use crate::wallet::Wallet;
 
@@ -46,7 +45,7 @@ impl TxBuilder {
         ogmios: &OgmiosHttpClient,
         pparams: &ProtocolParams,
     ) -> Result<BuiltTx> {
-        let validity_interval = self.validity_interval.clone();
+        let validity_interval = self.validity_interval;
         self = self.apply_validity_interval(&validity_interval)?;
         // TODO: language view can only be set once per transaction, so this doens't make sense
         for script_kind in self.script_kinds.iter() {

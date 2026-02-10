@@ -83,22 +83,16 @@ impl TxBuilder {
         amount: i64,
         redeemer: Vec<u8>,
     ) -> Result<Self, TxBuilderError> {
+        if amount == 0 {
+            return Err(TxBuilderError::InvalidMintAmount);
+        }
+
         let asset_id = asset.clone();
         self.body = self.body.mint_asset(asset.policy, asset.name, amount)?;
-        if let Some(quantity) = self.body.mint.get(&asset_id).copied() {
-            if quantity == 0 {
-                // there cannot be any 0-valued entries in a valid value
-                self.body.mint.remove(&asset_id);
-            }
-        }
 
         // if minting + burning results in a mint value of 0, the minting policy is not invoked and
         // the redeemer must be removed to avoid an integrity hash mismatch.
-        let has_policy_mint = self
-            .body
-            .mint
-            .iter()
-            .any(|(id, quantity)| id.policy == asset_id.policy && *quantity != 0);
+        let has_policy_mint = self.body.mint.keys().any(|id| id.policy == asset_id.policy);
         if has_policy_mint {
             self.body = self.body.add_mint_redeemer(asset_id.policy, redeemer, None);
         } else {
