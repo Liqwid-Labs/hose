@@ -161,22 +161,26 @@ impl TxBuilder {
             let range = pparams.min_fee_reference_scripts.range as u64;
             let base = pparams.min_fee_reference_scripts.base;
             let multiplier = pparams.min_fee_reference_scripts.multiplier;
+
+            // to match the ledger's behavior, all tier contributions need to be summed first,
+            // then floored only at the very end. See `tierRefScriptFee`:
+            // https://github.com/IntersectMBO/cardano-ledger/blob/6ef1bf9fa1ca589e706e781fa8c9b4ad8df1e919/eras/conway/impl/src/Cardano/Ledger/Conway/Tx.hs#L122-L130
             let steps = (total_ref_script_size / range) as i32;
             let cost_per_step = range as f64 * base;
+            let mut ref_script_fee = 0.0;
+
             for i in 0..steps {
-                min_fee += BigRational::from_integer(
-                    ((cost_per_step * multiplier.powi(i)).floor() as u64).into(),
-                );
+                ref_script_fee += cost_per_step * multiplier.powi(i);
             }
 
             // Partial chunk
             let partial_chunk_bytes = total_ref_script_size % range;
             if partial_chunk_bytes > 0 {
                 let base_cost = partial_chunk_bytes as f64 * base;
-                min_fee += BigRational::from_integer(
-                    ((base_cost * multiplier.powi(steps)).floor() as u64).into(),
-                );
+                ref_script_fee += base_cost * multiplier.powi(steps);
             }
+
+            min_fee += BigRational::from_integer((ref_script_fee.floor() as u64).into());
         }
 
         let fee = min_fee
