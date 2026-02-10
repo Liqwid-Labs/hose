@@ -8,6 +8,7 @@ tracing = "0.1"
 tracing-subscriber = "0.3.19"
 thiserror = "2.0"
 anyhow = "1.0"
+intervals-general = "0.1"
 
 hydrant = { git = "https://github.com/liqwid-labs/hydrant" }
 ogmios-client = { git = "https://github.com/liqwid-labs/ogmios-client-rs" }

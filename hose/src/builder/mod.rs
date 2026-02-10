@@ -3,14 +3,16 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use hydrant::UtxoIndexer;
+use intervals_general::Interval;
 use ogmios_client::OgmiosHttpClient;
 use ogmios_client::method::pparams::ProtocolParams;
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::conway::LanguageView;
 use tokio::sync::Mutex;
 
+use crate::builder::tx::TxBuilderError;
 use crate::primitives::{DatumOption, Output, ScriptKind, TxHash};
 use crate::wallet::Wallet;
 
@@ -28,6 +30,7 @@ pub struct TxBuilder {
     change_address: Address,
     change_datum: Option<DatumOption>,
     script_kinds: HashSet<ScriptKind>,
+    pub validity_interval: Interval<u64>,
 }
 
 // TODO: redeemers, auxillary data, language view, delegation, governance
@@ -43,6 +46,8 @@ impl TxBuilder {
         ogmios: &OgmiosHttpClient,
         pparams: &ProtocolParams,
     ) -> Result<BuiltTx> {
+        let validity_interval = self.validity_interval.clone();
+        self = self.apply_validity_interval(&validity_interval)?;
         // TODO: language view can only be set once per transaction, so this doens't make sense
         for script_kind in self.script_kinds.iter() {
             if let Some(language_view) = language_view_for_script_kind(*script_kind, pparams) {
@@ -124,6 +129,65 @@ impl TxBuilder {
             .build_conway(Some(evaluation))
             .context("failed to build transaction")?;
         Ok(BuiltTx::new(self.body, tx))
+    }
+
+    pub fn apply_validity_interval(mut self, validity_interval: &Interval<u64>) -> Result<Self> {
+        // Note: Cardano validity interval semantics.
+        //
+        // Cardano treats the validity interval as a left-half-open interval, i.e. [start, end)
+        // Therefore, we need to adjust the start and end slots to account for this.
+        //
+        match validity_interval {
+            Interval::Closed { bound_pair: pair } => {
+                self.body = self.body.valid_from_slot(*pair.left());
+                self.body = self.body.invalid_from_slot(*pair.right() - 1);
+            }
+            Interval::UnboundedClosedLeft { left } => {
+                // specified: [start, +inf)
+                self.body = self.body.valid_from_slot(*left);
+            }
+            Interval::UnboundedClosedRight { right } => {
+                // specified: (-inf, end]
+                self.body = self.body.invalid_from_slot(*right - 1);
+            }
+            Interval::UnboundedOpenLeft { left } => {
+                // specified: (start, +inf)
+                self.body = self.body.valid_from_slot(*left - 1);
+            }
+            Interval::UnboundedOpenRight { right } => {
+                // specified: (-inf, end)
+                self.body = self.body.invalid_from_slot(*right);
+            }
+            Interval::Unbounded => {
+                // specified: (-inf, +inf)
+            }
+            Interval::Open { bound_pair } => {
+                // specified: (start, end)
+                self.body = self.body.valid_from_slot(*bound_pair.left() + 1);
+                self.body = self.body.invalid_from_slot(*bound_pair.right());
+            }
+            Interval::LeftHalfOpen { bound_pair } => {
+                // specified: (start, end]
+                self.body = self.body.valid_from_slot(*bound_pair.left() + 1);
+                self.body = self.body.invalid_from_slot(*bound_pair.right() - 1);
+            }
+            Interval::RightHalfOpen { bound_pair } => {
+                // specified: [start, end)
+                // no adjustment needed!
+                self.body = self.body.valid_from_slot(*bound_pair.left());
+                self.body = self.body.invalid_from_slot(*bound_pair.right());
+            }
+            Interval::Singleton { at } => {
+                // specified: [start, end], where start == end
+                self.body = self.body.valid_from_slot(*at);
+                self.body = self.body.invalid_from_slot(*at + 1);
+            }
+
+            Interval::Empty => {
+                bail!("Validity interval is empty. This is likely a bug in hose.");
+            }
+        }
+        Ok(self)
     }
 }
 

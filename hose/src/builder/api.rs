@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 
 use hydrant::primitives::{Asset, AssetId};
+use intervals_general::Interval;
 use pallas::ledger::addresses::Address;
 use pallas::ledger::primitives::NetworkId;
 
@@ -20,6 +21,7 @@ impl TxBuilder {
             collateral_address: None,
             change_address,
             change_datum: None,
+            validity_interval: Interval::Unbounded,
             script_kinds: HashSet::new(),
         }
     }
@@ -284,11 +286,52 @@ impl TxBuilder {
         self
     }
 
-    pub fn valid_from(self, _timestamp: u64) -> Self {
-        todo!();
+    /// Sets the start of the validity interval for the transaction.
+    ///
+    /// Inclusive. If you care about different inclusivity, use `validity_interval` instead.
+    pub fn valid_from(mut self, slot: u64) -> Result<Self, TxBuilderError> {
+        let interval = Interval::UnboundedClosedLeft { left: slot };
+        self = self.validity_interval(interval)?;
+        Ok(self)
     }
-    pub fn valid_to(self, _timestamp: u64) -> Self {
-        todo!();
+
+    /// Sets the end of the validity interval for the transaction.
+    ///
+    /// Inclusive. If you care about different inclusivity, use `validity_interval` instead.
+    pub fn valid_to(mut self, slot: u64) -> Result<TxBuilder, TxBuilderError> {
+        let interval = Interval::UnboundedClosedRight { right: slot };
+        self = self.validity_interval(interval)?;
+        Ok(self)
+    }
+
+    /// Bounds the validity interval of the transaction by a given slot interval. Note that
+    /// if you have previously bounded it, they will be intersected. If they are disjoint,
+    /// the result will be the empty interval, leading to a InvalidValidityInterval error.
+    ///
+    /// Example:
+    /// ```
+    /// use intervals_general::{bound_pair::BoundPair, Interval};
+    /// use pallas::ledger::addresses::Address;
+    /// use pallas::ledger::primitives::NetworkId;
+    /// use hose::builder::TxBuilder;
+    /// let address = Address::from_bech32("addr1q9ct3v9ru6j8my2f6twme6gxsus670ul7pnnn4ervc0wylww7949sr6lj64c0u8ej9apt36czqm0umgd2qgjnxyrhnpqeeqvsy").unwrap();
+    /// let builder =
+    ///   TxBuilder::new(NetworkId::Mainnet, address)
+    ///     .validity_interval(Interval::Closed { bound_pair: BoundPair::new(5, 10).unwrap() });
+    /// ()
+    /// ```
+    pub fn validity_interval(
+        mut self,
+        slot_interval: Interval<u64>,
+    ) -> Result<Self, TxBuilderError> {
+        let new_interval = self.validity_interval.intersect(&slot_interval);
+        match new_interval {
+            Interval::Empty => Err(TxBuilderError::InvalidValidityInterval),
+            _ => {
+                self.validity_interval = new_interval;
+                Ok(self)
+            }
+        }
     }
 
     // Witnesses
@@ -308,5 +351,56 @@ impl TxBuilder {
     pub fn change_datum(mut self, datum: DatumOption) -> Self {
         self.change_datum = Some(datum);
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use intervals_general::bound_pair::BoundPair;
+
+    use super::*;
+
+    // assert_validity_interval_closed!(interval, 5, 10)
+    macro_rules! assert_validity_interval_closed {
+        ($interval:expr, $left:expr, $right:expr) => {
+            match $interval.clone() {
+                Interval::Closed { bound_pair: pair } => {
+                    assert_eq!(*pair.left(), $left);
+                    assert_eq!(*pair.right(), $right);
+                }
+                _ => panic!("Invalid interval."),
+            }
+        };
+    }
+
+    #[test]
+    fn test_validity_interval() {
+        let builder = TxBuilder::new(
+            NetworkId::Mainnet,
+            Address::from_bech32("addr1q9ct3v9ru6j8my2f6twme6gxsus670ul7pnnn4ervc0wylww7949sr6lj64c0u8ej9apt36czqm0umgd2qgjnxyrhnpqeeqvsy").unwrap(),
+        )
+        .valid_from(0)
+        .unwrap()
+        .valid_to(1000)
+        .unwrap();
+
+        assert_validity_interval_closed!(builder.validity_interval, 0, 1000);
+    }
+
+    #[test]
+    fn test_multiple_validity_intervals() {
+        let builder = TxBuilder::new(
+            NetworkId::Mainnet,
+            Address::from_bech32("addr1q9ct3v9ru6j8my2f6twme6gxsus670ul7pnnn4ervc0wylww7949sr6lj64c0u8ej9apt36czqm0umgd2qgjnxyrhnpqeeqvsy").unwrap(),
+        )
+        .valid_from(0)
+        .unwrap()
+        .valid_to(1000)
+        .unwrap();
+
+        let builder = builder.valid_from(500).unwrap().valid_to(1500).unwrap();
+
+        assert_validity_interval_closed!(builder.validity_interval, 500, 1000);
     }
 }

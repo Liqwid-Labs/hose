@@ -1030,6 +1030,7 @@ dependencies = [
  "ed25519-bip32",
  "hex",
  "hydrant",
+ "intervals-general",
  "num",
  "ogmios-client",
  "pallas",
@@ -1081,6 +1082,7 @@ dependencies = [
  "hose",
  "hose-devnet",
  "hydrant",
+ "intervals-general",
  "ogmios-client",
  "pallas",
  "serde_json",
@@ -1364,6 +1366,15 @@ dependencies = [
  "hashbrown 0.16.1",
  "serde",
  "serde_core",
+]
+
+[[package]]
+name = "intervals-general"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e5faa7d27f56b4018c239cc67f77106f6b4cea98d895fd6e28682c761ff2469"
+dependencies = [
+ "itertools 0.13.0",
 ]
 
 [[package]]

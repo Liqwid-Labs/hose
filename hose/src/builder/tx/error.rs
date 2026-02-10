@@ -37,4 +37,8 @@ pub enum TxBuilderError {
     /// Plutus scripts need a redeemer
     #[error("Plutus scripts must always take a redeemer")]
     RedeemerMissing,
+    #[error(
+        "Validity interval is disjoint with existing interval, making transaction invalid. This is likely a bug in your code."
+    )]
+    InvalidValidityInterval,
 }
